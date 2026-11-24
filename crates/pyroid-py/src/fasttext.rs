@@ -25,7 +25,7 @@ use pyo3::types::{PyBytes, PyDict, PyList, PyString, PyTuple, PyType};
 use pyroid_core::fasttext::{self as ft, LoadError, PredictError, Prediction};
 
 use crate::batch::{DocCost, map_values, map_values_cost};
-use crate::errors::{PyroidError, with_note};
+use crate::errors::{PyroidError, os_error, with_note};
 use crate::input::{TextInput, Threads, arg_note};
 
 /// `get_line` result for one document: its word tokens and known labels.
@@ -66,30 +66,9 @@ fn require_numpy(py: Python<'_>) -> PyResult<()> {
 fn load_error(py: Python<'_>, path: &std::path::Path, err: LoadError) -> PyErr {
     let shown = path.display();
     match err {
-        LoadError::Io(e) => match e.raw_os_error() {
-            // OSError(errno, strerror, filename) becomes FileNotFoundError etc.
-            Some(code) => {
-                let msg = e.to_string();
-                // io::Error's Display appends " (os error N)": Python shows the errno itself.
-                let strerror = msg
-                    .strip_suffix(&format!(" (os error {code})"))
-                    .unwrap_or(&msg);
-                // On Windows the code is a Windows error (5 = ERROR_ACCESS_DENIED), not an errno.
-                // Passed as OSError's winerror, it gives the errno and the subclass
-                // (PermissionError), and CPython's own messages drop the trailing period.
-                #[cfg(windows)]
-                let args = (
-                    code,
-                    strerror.trim_end_matches(['.', ' ']).to_owned(),
-                    shown.to_string(),
-                    code,
-                );
-                #[cfg(not(windows))]
-                let args = (code, strerror.to_owned(), shown.to_string());
-                PyOSError::new_err(args)
-            }
-            None => PyOSError::new_err(format!("{shown}: {e}")),
-        },
+        // OSError(errno, strerror, filename) becomes FileNotFoundError etc.
+        LoadError::Io(e) => os_error(py, &e, shown.to_string())
+            .unwrap_or_else(|| PyOSError::new_err(format!("{shown}: {e}"))),
         // MemoryError, as fastText's std::bad_alloc becomes in Python (callers fall back on it).
         e @ LoadError::OutOfMemory { .. } => PyMemoryError::new_err(format!("{shown}: {e}")),
         other => match model_error_type(py) {
@@ -308,17 +287,15 @@ impl Model {
     }
 
     fn words_list<'py>(&self, py: Python<'py>, errors: &str) -> PyResult<Bound<'py, PyList>> {
-        let items = (0..self.inner.nwords())
-            .map(|i| decode(py, self.inner.word(i), errors))
-            .collect::<PyResult<Vec<_>>>()?;
-        PyList::new(py, items)
+        let n = self.inner.nwords();
+        let items = (0..n).map(|i| Ok(decode(py, self.inner.word(i), errors)?.into_any()));
+        crate::arrow::collect::<PyList>(py, n, items)
     }
 
     fn labels_list<'py>(&self, py: Python<'py>, errors: &str) -> PyResult<Bound<'py, PyList>> {
-        let items = (0..self.inner.nlabels())
-            .map(|i| self.label_str(py, i, errors))
-            .collect::<PyResult<Vec<_>>>()?;
-        PyList::new(py, items)
+        let n = self.inner.nlabels();
+        let items = (0..n).map(|i| Ok(self.label_str(py, i, errors)?.into_any()));
+        crate::arrow::collect::<PyList>(py, n, items)
     }
 
     fn get_words_impl<'py>(
@@ -408,25 +385,18 @@ impl Model {
             let probs = PyArray1::from_iter(py, preds.iter().map(|p| f64::from(p.prob)));
             return PyTuple::new(py, [PyTuple::new(py, labels)?.into_any(), probs.into_any()]);
         }
-        let mut all_labels = Vec::with_capacity(results.len());
-        let mut all_probs = Vec::with_capacity(results.len());
-        for r in &results {
-            if let Some(Ok(preds)) = r {
-                all_labels.push(self.label_list(py, preds, on_unicode_error)?.into_any());
-                all_probs.push(PyArray1::from_iter(py, preds.iter().map(|p| p.prob)).into_any());
-            } else {
-                // Arrow nulls stay null.
-                all_labels.push(py.None().into_bound(py));
-                all_probs.push(py.None().into_bound(py));
-            }
-        }
-        PyTuple::new(
-            py,
-            [
-                PyList::new(py, all_labels)?.into_any(),
-                PyList::new(py, all_probs)?.into_any(),
-            ],
-        )
+        // Arrow nulls stay null.
+        let all_labels = results.iter().map(|r| match r {
+            Some(Ok(preds)) => Ok(self.label_list(py, preds, on_unicode_error)?.into_any()),
+            _ => Ok(py.None().into_bound(py)),
+        });
+        let all_labels = crate::arrow::collect::<PyList>(py, results.len(), all_labels)?;
+        let all_probs = results.iter().map(|r| match r {
+            Some(Ok(preds)) => Ok(PyArray1::from_iter(py, preds.iter().map(|p| p.prob)).into_any()),
+            _ => Ok(py.None().into_bound(py)),
+        });
+        let all_probs = crate::arrow::collect::<PyList>(py, results.len(), all_probs)?;
+        PyTuple::new(py, [all_labels.into_any(), all_probs.into_any()])
     }
 
     /// The sentence vector of a line (float32), or a 2-D array for a batch.
@@ -595,20 +565,20 @@ impl Model {
         if matches!(input, TextInput::Str(_)) {
             return PyTuple::new(py, pair(results.into_iter().next().flatten())?);
         }
-        let mut words = Vec::with_capacity(results.len());
-        let mut labels = Vec::with_capacity(results.len());
-        for r in results {
-            let [w, l] = pair(r)?;
-            words.push(w);
-            labels.push(l);
-        }
-        PyTuple::new(
-            py,
-            [
-                PyList::new(py, words)?.into_any(),
-                PyList::new(py, labels)?.into_any(),
-            ],
-        )
+        // Each list in place, checking for Ctrl-C per 65,536 tokens made.
+        let column = |label: bool| {
+            let mut checks = crate::arrow::Checks::default();
+            let items = results.iter().map(|r| match r {
+                Some(Ok((w, l))) => {
+                    let tokens = if label { l } else { w };
+                    checks.tick(py, tokens.len())?;
+                    Ok(PyList::new(py, tokens)?.into_any())
+                }
+                _ => Ok(py.None().into_bound(py)),
+            });
+            crate::arrow::collect::<PyList>(py, results.len(), items)
+        };
+        PyTuple::new(py, [column(false)?.into_any(), column(true)?.into_any()])
     }
 
     /// The word and its character n-grams, with their input-matrix rows.

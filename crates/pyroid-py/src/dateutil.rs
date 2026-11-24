@@ -2394,34 +2394,32 @@ fn each_str<'py>(
         };
         strs.push(s.clone());
     }
-    let mut out = Vec::with_capacity(strs.len());
-    for (i, s) in strs.into_iter().enumerate() {
-        out.push(call(i, s)?.unwrap_or_else(none));
-    }
-    if tuple {
-        Ok(PyTuple::new(py, out)?.into_any())
-    } else {
-        Ok(PyList::new(py, out)?.into_any())
-    }
+    let len = strs.len();
+    let items = strs
+        .into_iter()
+        .enumerate()
+        .map(|(i, s)| Ok(call(i, s)?.unwrap_or_else(none)));
+    crate::arrow::collect_seq(py, tuple, len, items)
 }
 
-/// The batch's results in the caller's container kind (Arrow: a list for now).
+/// The batch's results in the caller's container kind (Arrow: a list for now), filled in
+/// place with Ctrl-C checks (`arrow::collect`).
 fn output<'py>(
     py: Python<'py>,
     input: &crate::input::TextInput,
     out: Vec<Option<Bound<'py, PyAny>>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     use crate::input::TextInput;
-    let items = out
+    let len = out.len();
+    let mut items = out
         .into_iter()
-        .map(|v| v.unwrap_or_else(|| py.None().into_bound(py)));
+        .map(|v| Ok(v.unwrap_or_else(|| py.None().into_bound(py))));
     match input {
-        TextInput::Str(_) => Ok(items
-            .into_iter()
-            .next()
-            .unwrap_or_else(|| py.None().into_bound(py))),
-        TextInput::Tuple(_) => Ok(PyTuple::new(py, items)?.into_any()),
-        TextInput::List(_) | TextInput::Arrow(_) => Ok(PyList::new(py, items)?.into_any()),
+        TextInput::Str(_) => items.next().unwrap_or_else(|| Ok(py.None().into_bound(py))),
+        TextInput::Tuple(_) => crate::arrow::collect_seq(py, true, len, items),
+        TextInput::List(_) | TextInput::Arrow(_) => {
+            crate::arrow::collect_seq(py, false, len, items)
+        }
     }
 }
 
@@ -2542,7 +2540,7 @@ fn parse_batch<'py>(
         }
         Err(e) => return Err(e),
     };
-    let rows = crate::batch::rows(&input).map_err(|e| e.into_pyerr(py))?;
+    let rows = crate::batch::rows_checked(py, &input)?;
     let opts = private_kwargs(Some(&rest))?.expect("only _parse's keywords");
     let info = p.getattr(pyo3::intern!(py, "info"))?;
     let slow_reason = match parser_override(py, h, &p)? {
@@ -2688,7 +2686,7 @@ fn isoparse_batch<'py>(
         }
         Err(e) => return Err(e),
     };
-    let rows = crate::batch::rows(&input).map_err(|e| e.into_pyerr(py))?;
+    let rows = crate::batch::rows_checked(py, &input)?;
     let real = h
         .iso_module
         .bind(py)

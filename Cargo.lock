@@ -379,6 +379,7 @@ version = "1.0.1"
 dependencies = [
  "numpy",
  "pyo3",
+ "pyo3-build-config",
  "pyroid-core",
  "rustc-hash",
  "simdutf8",

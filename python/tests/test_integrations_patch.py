@@ -892,12 +892,34 @@ def test_patch_is_idempotent_and_warns_once_per_name() -> None:
             assert all((w.filename, w.lineno) == ("<string>", line) for w in warned)
             text = [str(w.message) for w in warned]
             assert "`import ftfy` now gives pyroid's drop-in (pyroid.ftfy" in text[0]
-            assert "6.3.1" in text[0] and "unpatch('ftfy')" in text[0]
-            assert "before this call keep the real one" in text[0] or "unavailable" in text[0]
-            assert "`import anyascii`" in text[1] and "unpatch('anyascii')" in text[1]
+            assert "6.3.1" in text[0]
+            assert "before this call keep the real one" in text[0] or "alone" in text[0]
+            assert "`import anyascii`" in text[1]
             """
         )
     )
+
+
+def test_patch_warning_without_the_incumbent_is_one_sentence() -> None:
+    """On a base install the README's patch() line warns first: it was ~400 characters a name."""
+    out = ok(
+        child(
+            """
+            import pyroid.translit
+            import pyroid.integrations as pi
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                pi.patch("anyascii")
+            print(json.dumps([str(w.message) for w in caught]))
+            """,
+            hide=("anyascii",),
+        )
+    )
+    assert out == [
+        "pyroid.integrations.patch: anyascii is not installed, so `import anyascii` now gives "
+        "pyroid.translit alone (pip install anyascii==0.3.3 for the rest). This warning is "
+        "shown once."
+    ]
 
 
 def test_patch_from_many_threads_installs_one_shim() -> None:
@@ -940,6 +962,181 @@ def test_modules_that_imported_before_keep_the_real_module() -> None:
             """
         )
     )
+
+
+# A KeyboardInterrupt at each step of patch() and unpatch(), raised before the step and after it:
+# afterwards the module is patched and recorded (patched()), or neither. A step is any call of
+# _patch's helpers, of the target's build, of an undo step, or of importlib.import_module (which
+# the builds call between the attributes they swap).
+CTRL_C = """
+import dataclasses, types
+import pyroid.integrations._patch as p
+warnings.simplefilter("ignore")
+name = sys.argv[1]
+SWAPS = {"nltk": p._NLTK_SWAPS, "warcio": p._WARCIO_SWAPS, "nemo_curator": p._NEMO_SWAPS}
+
+class Ref:
+    # A module global compared by identity (a NaN or a mutable object is equal to itself only),
+    # and a function by the code it had when the state was taken (langdetect's patch swaps the
+    # code of langdetect's own functions).
+    __slots__ = ("v", "code")
+    def __init__(self, v):
+        self.v = v
+        self.code = v.__code__ if isinstance(v, types.FunctionType) else None
+    def __eq__(self, other):
+        return isinstance(other, Ref) and other.v is self.v and other.code is self.code
+    def __repr__(self):
+        return f"<{type(self.v).__name__} {getattr(self.v, '__qualname__', '')}>"
+
+def norm(v):
+    if isinstance(v, p._Shim):
+        return "shim"
+    if isinstance(v, types.ModuleType) and (v.__doc__ or "").startswith("pyroid's drop-ins"):
+        return "drop-in module"
+    return v
+
+def state():
+    # What patch(name) changes: sys.modules' entries for it and the attributes it swaps. A real
+    # module that is not the one in `before` was imported by a patch() (afresh each time).
+    mods = {}
+    for k, v in sys.modules.copy().items():
+        if p._owned(k, name):
+            v = norm(v)
+            if isinstance(v, types.ModuleType) and before is not None and before[0].get(k) is not v:
+                v = "imported by patch()"
+            mods[k] = v
+    attrs = {}
+    for mod, names in SWAPS.get(name, {}).items():
+        m = sys.modules.get(mod)
+        if m is not None and not isinstance(m, p._Shim):
+            attrs.update({(mod, n): m.__dict__.get(n, "missing") for n in names})
+    # Every global of the real package's modules that were there before patch() (the builds that
+    # swap attributes: yaml, dateutil, jmespath, packaging, sqlparse and the three above), and the
+    # attributes of the classes those modules define (methods swapped in place).
+    for k, m in mods.items():
+        if isinstance(m, types.ModuleType) and not isinstance(m, p._Shim):
+            if before is None or before[0].get(k) is m:
+                for n, v in vars(m).copy().items():
+                    attrs[(k, n)] = Ref(v)
+                    if isinstance(v, type) and v.__module__ == k:
+                        attrs.update({(k, n, a): Ref(f) for a, f in vars(v).copy().items()})
+    return mods, attrs
+
+def differ(got, want):
+    # The entries in which two states differ (the states are large: every global of the package).
+    out = {}
+    for g, w in zip(got, want):
+        for key in g.keys() | w.keys():
+            if g.get(key, "absent") != w.get(key, "absent"):
+                out[key] = (g.get(key, "absent"), w.get(key, "absent"))
+    return out
+
+calls, fire, fired = 0, None, False
+
+def step(fn, after=True):
+    def wrapped(*args, **kwargs):
+        global calls, fired
+        calls += 1
+        i = calls
+        if fire == (i, "before"):
+            fired = True
+            raise KeyboardInterrupt
+        out = fn(*args, **kwargs)
+        if after and fire == (i, "after"):
+            fired = True
+            raise KeyboardInterrupt
+        return out
+    return wrapped
+
+# One patch and unpatch first, so every module patch() imports is imported before the reference
+# states are taken.
+error = patched = before = None
+try:
+    p.patch(name)
+except ImportError:  # nemo_curator without NeMo Curator
+    error = ImportError
+p.unpatch(name)
+before = state()
+if error is None:
+    p.patch(name)
+    patched = state()
+    p.unpatch(name)
+    assert state() == before != patched, differ(state(), before)
+
+for attr in ("_check", "_impl", "_real", "_Active", "_announce", "_restore"):
+    setattr(p, attr, step(getattr(p, attr)))
+# Every setattr() in _patch.py and in the modules builds hand their swaps to (pyroid.langdetect's
+# _patch), so a Ctrl-C can also land between two attribute swaps of a build or of an undo step (a
+# global of the module, which its code finds before the builtin).
+p.setattr = step(setattr)
+for k, m in list(sys.modules.items()):
+    if k.startswith("pyroid.") and k.endswith("._patch") and m is not p:
+        m.setattr = p.setattr
+importlib.import_module = step(importlib.import_module)
+target = p._TARGETS[name]
+# No "after" for the build: CPython runs signal handlers at calls and loop jumps, not on a
+# return, so a Ctrl-C cannot land between a build's last line and the caller's next step.
+p._TARGETS[name] = dataclasses.replace(target, build=step(target.build, after=False))
+
+def unpatched():
+    p.unpatch(name)
+    assert state() == before and p.patched() == ()
+
+def patch_and_wrap_undo():
+    p.patch(name)
+    record = p._ACTIVE[name]
+    record.undo[:] = [step(s) for s in record.undo]
+
+def sweep(op, setup):
+    global calls, fire, fired
+    runs = 0
+    for when in ("before", "after"):
+        k = 0
+        while True:
+            k += 1
+            setup()
+            calls, fire, fired = 0, (k, when), False
+            try:
+                op()
+            except KeyboardInterrupt:
+                assert fired, (when, k)
+            except ImportError:
+                assert error is ImportError and not fired, (when, k)
+            finally:
+                fire = None
+            if k > calls:
+                break
+            recorded = name in p._ACTIVE
+            assert p.patched() == ((name,) if recorded else ()), (when, k)
+            got, want = state(), patched if recorded else before
+            assert got == want, (f"Ctrl-C {when} step {k}", recorded, differ(got, want))
+            runs += fired
+            unpatched()
+    return runs
+
+runs = {"patch": sweep(lambda: p.patch(name), unpatched)}
+if error is None:
+    runs["unpatch"] = sweep(lambda: p.unpatch(name), patch_and_wrap_undo)
+print(json.dumps(runs))
+"""
+
+
+def check_ctrl_c(name: str, *, hide: bool) -> None:
+    """Run CTRL_C for `name` (``hide``: as if its package were not installed)."""
+    runs = ok(child(CTRL_C, args=(name,), hide=(name,) if hide else ()))
+    assert runs["patch"] >= 3, runs
+    if "unpatch" in runs:
+        assert runs["unpatch"] >= 3, runs
+
+
+@pytest.mark.parametrize("scenario", ["installed", "not installed"])
+@pytest.mark.parametrize("name", _patch.SUPPORTED)
+def test_ctrl_c_leaves_a_patch_recorded_or_undone(name: str, scenario: str) -> None:
+    if name in ("fasttext", "datasketch") and not installed("numpy"):
+        pytest.skip(f"pyroid.{name} needs numpy")
+    if scenario == "installed" and not installed(name):
+        pytest.skip(f"needs {name}")  # nemo_curator: test_nemo_curator_patch.py
+    check_ctrl_c(name, hide=scenario == "not installed")
 
 
 # ---------------------------------------------------------------------------
@@ -990,6 +1187,41 @@ def test_run_script(tmp_path: Path) -> None:
         "pyroid run: PatchWarning: ftfy patched with pyroid.ftfy, in this process and the "
         "Python processes it starts\n"
     )
+
+
+MAIN_PROBE = """\
+import json, os, sys, __main__
+here = os.path.dirname(__file__)
+os.chdir(os.path.dirname(here))  # a script that changes directory still finds files next to it
+with open(os.path.join(here, "data.txt")) as f:
+    data = f.read()
+print(json.dumps({
+    "file": __file__, "argv0": sys.argv[0], "code": sys._getframe().f_code.co_filename,
+    "package": __package__, "loader": type(__loader__).__name__, "spec": __spec__,
+    "cached": globals().get("__cached__", "missing"), "main": __main__.__dict__ is globals(),
+    "builtins": __builtins__ is __import__("builtins"), "data": data,
+}))
+"""
+
+
+@pytest.mark.parametrize("target", ["sub/probe.py", "./sub/../sub/probe.py", "probe.pyc"])
+def test_run_script_main_is_as_python_sets_it(tmp_path: Path, target: str) -> None:
+    """``__file__`` is absolute (CPython 3.9+), ``sys.argv[0]`` stays as given; it was the
+    relative path, so a script that changed directory could not find its own files."""
+    import py_compile
+
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub/probe.py").write_text(MAIN_PROBE)
+    (tmp_path / "sub/data.txt").write_text("next to the script")
+    py_compile.compile(str(tmp_path / "sub/probe.py"), str(tmp_path / "probe.pyc"))
+    (tmp_path / "data.txt").write_text("next to the script")
+    python = subprocess.run(
+        [sys.executable, target], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    want = json.loads(python.stdout)
+    assert os.path.isabs(want["file"])
+    got = ok(run_cli(["-p", "ftfy", target], cwd=tmp_path))
+    assert got == want
 
 
 def test_run_refuses_a_second_target_while_one_runs(tmp_path: Path) -> None:
@@ -1054,13 +1286,19 @@ def test_run_tracebacks_start_at_the_target(tmp_path: Path) -> None:
     if launcher.exists():
         cmd = [str(launcher), "run", "-p", "ftfy", "boom.py"]
         runs.append(subprocess.run(cmd, cwd=tmp_path, capture_output=True, text=True, check=False))
+    boom = os.path.join(str(tmp_path), "boom.py")  # absolute, as python shows it
+    python = subprocess.run(
+        [sys.executable, "boom.py"], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    assert f'  File "{boom}", line 5, in <module>' in python.stderr
     for proc in runs:
         assert proc.returncode == 1
+        assert proc.stderr.endswith(python.stderr), proc.stderr
         tb = proc.stderr.split("Traceback (most recent call last):\n", 1)[1].splitlines()
-        assert tb[0] == '  File "boom.py", line 5, in <module>', proc.stderr
+        assert tb[0] == f'  File "{boom}", line 5, in <module>', proc.stderr
         assert [ln for ln in tb if ln.startswith("  File ")] == [
-            '  File "boom.py", line 5, in <module>',
-            '  File "boom.py", line 2, in f',
+            f'  File "{boom}", line 5, in <module>',
+            f'  File "{boom}", line 2, in f',
         ]
         assert tb[-1] == "ValueError: boom"
     proc = run_cli(["-p", "ftfy", "bad.py"], cwd=tmp_path)
@@ -1125,6 +1363,17 @@ def test_run_usage(tmp_path: Path, argv: list[str], code: int, message: str) -> 
     if code == 0:
         assert proc.stdout.startswith("usage: pyroid run")
         assert "-p, --patch NAMES" in proc.stdout
+
+
+@pytest.mark.parametrize("columns", [60, 100, 300])
+def test_run_help_fits_the_terminal(tmp_path: Path, columns: int) -> None:
+    # The -p line listed every name on one line (223 characters with 17 names).
+    proc = run_cli(["--help"], cwd=tmp_path, env={"COLUMNS": str(columns)})
+    assert proc.returncode == 0, proc.stderr
+    assert max(map(len, proc.stdout.splitlines())) <= columns - 2, proc.stdout
+    assert proc.stdout.split() == _patch._RUN_HELP.split()
+    assert "\n  -p, --patch NAMES  comma-separated modules" in proc.stdout
+    assert proc.stdout.startswith("usage: pyroid run [-p NAMES]")
 
 
 def test_run_names_default_to_the_environment_then_ftfy_fasttext(tmp_path: Path) -> None:
@@ -1208,7 +1457,11 @@ def test_hook_patches_from_the_environment(tmp_path: Path) -> None:
     out = ok(proc)
     assert out["ftfy"] is True
     assert out["warned"] == "ftfy,anyascii"
-    assert proc.stderr.count("PatchWarning") == 2, proc.stderr
+    # One plain line, as under pyroid run: patch()'s long warning per name pointed into the hook.
+    assert proc.stderr == (
+        "pyroid: PatchWarning: ftfy, anyascii patched with pyroid.ftfy, pyroid.translit (from "
+        "$PYROID_PATCH), in this process and the Python processes it starts\n"
+    )
     # Already warned higher up the process tree: quiet.
     env = hook_env(PYROID_PATCH="ftfy", _PYROID_PATCH_WARNED="ftfy")
     proc = child(HOOK_PROBE, env=env, prelude=False, cwd=tmp_path)
@@ -1241,7 +1494,7 @@ def test_hook_runs_the_sitecustomize_it_shadows(tmp_path: Path) -> None:
 def test_hook_warns_about_unknown_names(tmp_path: Path) -> None:
     proc = child(HOOK_PROBE, env=hook_env(PYROID_PATCH="ftfy,nope"), prelude=False, cwd=tmp_path)
     assert ok(proc)["ftfy"] is True
-    assert "ignoring 'nope' in $PYROID_PATCH" in proc.stderr
+    assert "pyroid: PatchWarning: ignoring 'nope' in $PYROID_PATCH" in proc.stderr
 
 
 def test_hook_is_inert_when_imported_as_part_of_the_package() -> None:

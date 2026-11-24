@@ -24,14 +24,30 @@ import urllib.request
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pyroid._deps import missing
 
-try:
+if TYPE_CHECKING:
     import pyarrow as pa
-except ModuleNotFoundError as _exc:
-    missing(__name__, _exc, "cli", "pyarrow")
+else:
+
+    class _Pyarrow:
+        """pyarrow, imported where this module first uses it.
+
+        The commands that read or write no data file (``pyroid stats``, ``pyroid dedup
+        buckets`` and ``cluster``) and the run records then work without it.
+        """
+
+        def __getattr__(self, name: str) -> Any:
+            try:
+                import pyarrow
+            except ModuleNotFoundError as exc:
+                missing(__name__, exc, "cli", "pyarrow")
+            globals()["pa"] = pyarrow
+            return getattr(pyarrow, name)
+
+    pa = _Pyarrow()
 
 PARQUET = (".parquet", ".pq")
 JSONL = (".jsonl", ".ndjson", ".json")
@@ -234,32 +250,31 @@ def _walk(root: str, glob: _Glob | None, excluded: Sequence[str]) -> list[tuple[
     while stack:
         rel, real_dir, abs_dir = stack.pop()
         try:
-            entries = os.scandir(abs_dir)
-        except (FileNotFoundError, NotADirectoryError):
-            if rel:
+            entries = scandir(abs_dir)
+        except OSError:
+            if rel or os.path.isdir(abs_dir):  # see makedirs: not by the errno
                 raise
             break  # a glob's root that does not exist: no match
-        with entries:
-            for e in entries:
-                if e.name.startswith((".", "_")):
+        for e in entries:
+            if e.name.startswith((".", "_")):
+                continue
+            r = f"{rel}/{e.name}" if rel else e.name
+            if e.is_dir():
+                if glob is not None and not glob.may_match_below(r):
                     continue
-                r = f"{rel}/{e.name}" if rel else e.name
-                if e.is_dir():
-                    if glob is not None and not glob.may_match_below(r):
-                        continue
-                    sub = _canon(e.path) if e.is_symlink() else os.path.join(real_dir, e.name)
-                    sub = os.path.normcase(sub)
-                    if sub in visited or _excluded(sub, excluded):
-                        continue
-                    visited.add(sub)
-                    stack.append((r, sub, e.path))
-                elif e.is_file() and _known(e.name) and (glob is None or glob(r)):
-                    key = os.path.join(real_dir, os.path.normcase(e.name))
-                    if _excluded(key, excluded):
-                        continue
-                    uri = os.path.join(root, *r.split("/"))
-                    src = Source(uri, r, e.stat().st_size, file_format(e.name), None, e.path)
-                    found.append((key, src))
+                sub = _canon(e.path) if e.is_symlink() else os.path.join(real_dir, e.name)
+                sub = os.path.normcase(sub)
+                if sub in visited or _excluded(sub, excluded):
+                    continue
+                visited.add(sub)
+                stack.append((r, sub, e.path))
+            elif e.is_file() and _known(e.name) and (glob is None or glob(r)):
+                key = os.path.join(real_dir, os.path.normcase(e.name))
+                if _excluded(key, excluded):
+                    continue
+                uri = os.path.join(root, *r.split("/"))
+                src = Source(uri, r, e.stat().st_size, file_format(e.name), None, e.path)
+                found.append((key, src))
     found.sort(key=lambda kv: kv[1].name)
     return found
 
@@ -488,11 +503,19 @@ def _open_stream(source: Source) -> Iterator[Any]:
 
 @contextlib.contextmanager
 def _errors(source: Source) -> Iterator[None]:
-    """Name the file in pyarrow's parse errors."""
+    """Name the file in pyarrow's parse and decompression errors."""
     try:
         yield
     except pa.ArrowInvalid as e:
         raise ValueError(f"{source.uri}: {e}") from e
+    except EOFError as e:
+        raise EOFError(f"{source.uri}: {e}") from e
+    except OSError as e:
+        # pyarrow's codec errors ("Truncated compressed stream") name no file; an OSError of
+        # the file system names its path itself.
+        if e.errno is not None or e.filename is not None or str(e).startswith(source.uri):
+            raise
+        raise OSError(f"{source.uri}: {e}") from e
 
 
 def _check_columns(source: Source, names: Sequence[str], columns: Sequence[str]) -> None:
@@ -551,6 +574,14 @@ def _parse_json(chunk: bytes, schema: Any) -> Any:
     )
 
 
+def _is_json_name(name: str) -> bool:
+    """``x.json``, maybe compressed (``x.json.gz``): not ``.jsonl`` or ``.ndjson``."""
+    name = name.lower()
+    for ext in COMPRESSED:
+        name = name.removesuffix(ext)
+    return name.endswith(".json")
+
+
 def _bad_line(chunk: bytes, first: int, source: Source) -> ValueError | None:
     """The first line of ``chunk`` (line ``first`` of the file) that is not JSON, as an error.
 
@@ -563,14 +594,22 @@ def _bad_line(chunk: bytes, first: int, source: Source) -> ValueError | None:
         if line.endswith(b"\r"):  # else json names the CR in an unterminated string
             line = line[:-1]
         try:
-            json.loads(line)
+            value = json.loads(line)
+            if not isinstance(value, dict):
+                kind = "an array" if isinstance(value, list) else f"a {type(value).__name__}"
+                return ValueError(
+                    f"{source.uri}: line {first + i}: {kind}, not an object (pyroid reads "
+                    ".json, .jsonl and .ndjson files as JSON Lines: one object per line)"
+                )
         except UnicodeDecodeError as e:
             return ValueError(f"{source.uri}: line {first + i}: not UTF-8 (byte {e.start})")
         except json.JSONDecodeError as e:
             n = first + i
+            # A .json file holding one JSON document (an array, say) rather than JSON Lines.
+            hint = " (pyroid reads .json files as JSON Lines)" if _is_json_name(source.name) else ""
             if e.msg.endswith(" at"):  # "Unterminated string starting at"
-                return ValueError(f"{source.uri}: line {n}: {e.msg} column {e.colno}")
-            return ValueError(f"{source.uri}: line {n}, column {e.colno}: {e.msg}")
+                return ValueError(f"{source.uri}: line {n}: {e.msg} column {e.colno}{hint}")
+            return ValueError(f"{source.uri}: line {n}, column {e.colno}: {e.msg}{hint}")
         except ValueError as e:
             return ValueError(f"{source.uri}: line {first + i}: {e}")
     return None
@@ -583,6 +622,9 @@ def _json_batches(
     for chunk in _json_chunks(stream):
         try:
             t = _parse_json(chunk, schema)
+            # pyarrow's JSON reader passes strings that are not UTF-8 (latin-1 files); pyroid's
+            # kernels would reject them later, naming a row of an Arrow chunk, not the line.
+            t.validate(full=True)
         except pa.ArrowInvalid as e:
             bad = _bad_line(chunk, line, source)
             if bad is None:
@@ -884,12 +926,76 @@ def commit(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
 
 
 def remove(path: str | os.PathLike[str], *, missing_ok: bool = True) -> None:
-    """Delete the file ``path``, retrying while Windows reports it in use."""
+    """Delete the file ``path``, retrying while Windows reports it in use.
+
+    Whether it was missing is read from the disk, not from the error (see :func:`makedirs`).
+    """
     try:
         _retry(os.unlink, path)
-    except FileNotFoundError:
-        if not missing_ok:
+    except OSError:
+        if not missing_ok or os.path.lexists(path):
             raise
+
+
+# The errno of a failed os call is not always its own. On free-threaded CPython linked with
+# musl (Alpine), a thread whose call fails, or whose directory listing ends, while another
+# thread stops the world (a garbage collection) can see EAGAIN instead: the thread keeps errno
+# across re-attaching only in debug builds, and musl's sem_wait sets EAGAIN even when it
+# succeeds (CPython gh-161769). So the helpers below decide by what is on disk rather than by an
+# error's type (FileNotFoundError, FileExistsError), and list a directory again when its listing
+# reports EAGAIN, which no listing reports for real.
+_LISTINGS = 8  # tries
+
+
+def makedirs(path: str | os.PathLike[str]) -> None:
+    """Create the directory ``path`` and its missing parents; nothing if it exists.
+
+    ``Path.mkdir(parents=True)`` creates the parents only when ``mkdir`` fails with
+    FileNotFoundError; ``os.makedirs`` checks which parents exist first.
+    """
+    os.makedirs(path, exist_ok=True)
+
+
+def scandir(path: str | os.PathLike[str]) -> list[os.DirEntry[str]]:
+    """The entries of the directory ``path`` (as :func:`os.scandir` yields them)."""
+    for tries in range(_LISTINGS, 0, -1):
+        try:
+            with os.scandir(path) as it:
+                return list(it)
+        except BlockingIOError:
+            if tries == 1:
+                raise
+    raise AssertionError("unreachable")
+
+
+def iterdir(path: str | os.PathLike[str]) -> list[Path]:
+    """``Path(path).iterdir()``, as a list (see :func:`scandir`)."""
+    return [Path(path, e.name) for e in scandir(path)]
+
+
+def glob(root: str | os.PathLike[str], pattern: str) -> list[Path]:
+    """``Path(root).glob(pattern)`` for a pattern of ``/``-separated names and wildcards.
+
+    A directory that cannot be listed matches nothing, as in pathlib; one whose listing
+    reports EAGAIN is listed again (see :func:`scandir`).
+    """
+    found = [Path(root)]
+    parts = pattern.split("/")
+    for depth, part in enumerate(parts):
+        last = depth == len(parts) - 1
+        level = []
+        for d in found:
+            try:
+                entries = scandir(d)
+            except OSError:
+                continue
+            level += [
+                Path(d, e.name)
+                for e in entries
+                if fnmatch.fnmatch(e.name, part) and (last or e.is_dir())
+            ]
+        found = level
+    return found
 
 
 _O_BINARY = getattr(os, "O_BINARY", 0)  # Windows: no newline translation
@@ -906,8 +1012,10 @@ def _sibling(path: Path, ext: str) -> tuple[Path, int]:
         tmp = path.with_name(f".{path.name[:200]}.{secrets.token_hex(4)}{ext}")
         try:
             return tmp, os.open(tmp, flags, 0o666)  # the umask applies, as for any new file
-        except FileExistsError:
-            continue
+        except OSError:
+            if os.path.lexists(tmp):  # the name is taken (see makedirs: not by the errno)
+                continue
+            raise
         except BaseException:
             # O_EXCL and a random name: a file there now is the one this call made.
             with contextlib.suppress(OSError):
@@ -925,7 +1033,9 @@ def create_new(path: str | os.PathLike[str]) -> int:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _O_BINARY | getattr(os, "O_NOFOLLOW", 0)
     try:
         return os.open(path, flags, 0o666)  # the umask applies, as for any new file
-    except FileExistsError:
+    except OSError:
+        if not os.path.lexists(path):  # see makedirs: not by the errno
+            raise
         remove(path)
         return os.open(path, flags, 0o666)
 
@@ -941,7 +1051,7 @@ def _fsync(path: Path) -> None:
 def atomic_write_bytes(path: str | os.PathLike[str], data: bytes) -> None:
     """Write ``data`` to ``path`` atomically: a synced hidden sibling, then a rename."""
     p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
+    makedirs(p.parent)
     tmp, fd = _sibling(p, ".tmp")
     try:
         with open(fd, "wb") as f:
@@ -981,7 +1091,7 @@ class Writer:
         self._state = "open"
 
     def _open(self, schema: Any) -> Path:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        makedirs(self.path.parent)
         tmp, fd = _sibling(self.path, ".partial")
         self.tmp = tmp  # before anything that can be interrupted: abort() removes it
         try:

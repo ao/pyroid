@@ -98,6 +98,9 @@ fn surrogatepass_bytes<'py>(text: &Bound<'py, PyString>) -> PyResult<Bound<'py, 
         .cast_into::<PyBytes>()?)
 }
 
+/// Items `is_ascii` reads between two Ctrl-C checks.
+const CHECK_ITEMS: usize = 1 << 16;
+
 fn str_from_wtf8<'py>(py: Python<'py>, b: &[u8]) -> PyResult<Bound<'py, PyString>> {
     match std::str::from_utf8(b) {
         Ok(s) => Ok(PyString::new(py, s)),
@@ -443,18 +446,19 @@ impl<'py> Strs<'py> {
         py: Python<'py>,
         outs: impl Iterator<Item = Option<Vec<u8>>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let mut strs = Vec::with_capacity(self.items.len());
-        for (item, out) in self.items.iter().zip(outs) {
-            strs.push(match out {
+        let mut strs = self.items.iter().zip(outs).map(|(item, out)| {
+            Ok(match out {
                 None => item.clone(),
                 Some(v) => str_from_wtf8(py, &v)?,
-            });
+            }
+            .into_any())
+        });
+        let len = self.items.len();
+        match self.kind {
+            Kind::Str => strs.next().expect("one str"),
+            Kind::List => crate::arrow::collect_seq(py, false, len, strs),
+            Kind::Tuple => crate::arrow::collect_seq(py, true, len, strs),
         }
-        Ok(match self.kind {
-            Kind::Str => strs.swap_remove(0).into_any(),
-            Kind::List => PyList::new(py, strs)?.into_any(),
-            Kind::Tuple => PyTuple::new(py, strs)?.into_any(),
-        })
     }
 }
 
@@ -564,8 +568,12 @@ fn is_ascii<'py>(
         } else {
             string.cast::<PyTuple>()?.iter().collect()
         };
+        // The flags first (a tight loop), then the result filled in place.
         let mut mask = Vec::with_capacity(items.len());
         for (i, item) in items.iter().enumerate() {
+            if i % CHECK_ITEMS == CHECK_ITEMS - 1 {
+                py.check_signals()?;
+            }
             let Ok(s) = item.cast::<PyString>() else {
                 let err = input_error(
                     py,
@@ -575,11 +583,10 @@ fn is_ascii<'py>(
             };
             mask.push(str_isascii(s)?);
         }
-        return Ok(if is_list {
-            PyList::new(py, mask)?.into_any()
-        } else {
-            PyTuple::new(py, mask)?.into_any()
-        });
+        let flags = mask
+            .iter()
+            .map(|&b| Ok(PyBool::new(py, b).to_owned().into_any()));
+        return crate::arrow::collect_seq(py, !is_list, mask.len(), flags);
     }
     predicate(
         py,

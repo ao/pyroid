@@ -374,31 +374,35 @@ fn build<'py, W: Word>(
     }
     let texts = docs(x);
     let interned = intern_batch(py, &texts, results, threads)?;
-    let strs: Vec<Bound<'py, PyString>> = interned
-        .texts
-        .iter()
-        .map(|t| PyString::new(py, t))
-        .collect();
-    let mut out: Vec<Option<Bound<'py, PyList>>> = Vec::with_capacity(results.len());
+    // The strs, then the documents' lists in the result in place (the parts
+    // cover the documents in order), with a Ctrl-C check per 65,536 objects.
+    let mut checks = crate::arrow::Checks::default();
+    let mut strs: Vec<Bound<'py, PyString>> = Vec::with_capacity(interned.texts.len());
+    for t in &interned.texts {
+        checks.tick(py, 0)?;
+        strs.push(PyString::new(py, t));
+    }
+    let mut out = crate::arrow::Fill::<PyList>::new(py, results.len())?;
     for (local, remap) in &interned.parts {
         let mut ids: &[u32] = &local.ids;
         for i in local.docs.clone() {
             let list = match doc_words(&texts, results, i) {
                 Some((_, words)) => {
+                    checks.tick(py, words.len())?;
                     let (mine, rest) = ids.split_at(words.len());
                     ids = rest;
                     let items = words.iter().zip(mine).map(|(w, &id)| {
                         let id = remap.as_ref().map_or(id, |m| m[id as usize]);
                         w.object(strs[id as usize].clone())
                     });
-                    Some(PyList::new(py, items)?)
+                    PyList::new(py, items)?.into_any()
                 }
-                None => None,
+                None => py.None().into_bound(py),
             };
             out.push(list);
         }
     }
-    Ok(PyList::new(py, out)?.into_any())
+    Ok(out.finish().into_any())
 }
 
 /// One `jieba.Tokenizer`'s dictionary (`FREQ` and `total`).

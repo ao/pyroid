@@ -76,6 +76,11 @@ elif case == "sentence_dedup":
 elif case == "minhash_batch":
     import pyroid.datasketch as ds
     call = lambda d: ds.minhash_batch(d, ngram=3, threads=threads)
+elif case == "minhash_tokens":
+    import pyroid.datasketch as ds
+    docs = [[w.encode() for w in words.split()]] * n
+    small = docs[:200]
+    call = lambda d: ds.minhash_batch(d, threads=threads)
 elif case == "trafilatura":
     import pyroid.trafilatura as T
     page = "<html><body><article>" + "<p>" + words + "</p>" * 20 + "</article></body></html>"
@@ -151,6 +156,7 @@ CASES = [
     "minhash_dedup",
     "sentence_dedup",
     "minhash_batch",
+    "minhash_tokens",
     "trafilatura",
     "dateutil-parse",
     "dateutil-isoparse",

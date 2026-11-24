@@ -4,6 +4,7 @@
 use std::num::NonZeroUsize;
 use std::ops::Range;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, PoisonError};
 
 use pyo3::exceptions::{PyUnicodeEncodeError, PyValueError};
 use pyo3::prelude::*;
@@ -108,6 +109,9 @@ fn docs<'py>(
 ) -> PyResult<Vec<PyBackedStr>> {
     let mut out = Vec::with_capacity(items.len());
     for (i, item) in items.enumerate() {
+        if i % CHECK_ITEMS == CHECK_ITEMS - 1 {
+            item.py().check_signals()?;
+        }
         let Ok(s) = item.cast::<PyString>() else {
             return Err(not_a_str(&item, i));
         };
@@ -115,6 +119,10 @@ fn docs<'py>(
     }
     Ok(out)
 }
+
+/// Items read between two Ctrl-C checks while a list or tuple is extracted
+/// on the calling thread (attached, before the batch's own checks start).
+const CHECK_ITEMS: usize = 1 << 16;
 
 /// A list/tuple shorter than this is always extracted on the calling thread.
 const PAR_MIN_DOCS: usize = 2 * par::MIN_DOCS_PER_TASK;
@@ -172,6 +180,9 @@ fn docs_par<'py>(
     let mut lens: Vec<usize> = Vec::with_capacity(items.len());
     let mut not_str = None;
     for (i, item) in items.enumerate() {
+        if i % CHECK_ITEMS == CHECK_ITEMS - 1 {
+            py.check_signals()?;
+        }
         let Ok(s) = item.cast::<PyString>() else {
             not_str = Some(not_a_str(&item, i));
             break;
@@ -204,24 +215,43 @@ fn docs_par<'py>(
         let ranges = attach_ranges(&lens, total.div_ceil(tasks).min(PAR_CHARS_PER_ATTACH));
         let groups: Vec<&[Range<usize>]> = ranges.chunks(ranges.len().div_ceil(tasks)).collect();
         let first_err = AtomicUsize::new(usize::MAX);
-        let parts = py
-            .detach(|| {
-                par::map_tasks(&groups, threads, |group| {
-                    let mut part = Vec::new();
-                    for r in *group {
-                        if backed_range(&strs, r.clone(), &first_err, &mut part) {
-                            break;
-                        }
+        // Each task leaves its strs in its slot, so they are dropped here,
+        // attached, even when Ctrl-C stops the map (a map drops the results of
+        // a stopped call on the pool, where every reference would be released
+        // later through PyO3's pool of pending decrefs, one lock each). Ctrl-C
+        // stops it between two ranges (each at most PAR_CHARS_PER_ATTACH code
+        // points), as it stops a batch's kernel.
+        let slots: Vec<Mutex<Vec<PyBackedStr>>> =
+            groups.iter().map(|_| Mutex::new(Vec::new())).collect();
+        let tasks: Vec<(usize, &[Range<usize>])> = groups.iter().copied().enumerate().collect();
+        let done = crate::interrupt::detach_batch(py, || {
+            par::map_tasks_stoppable(&tasks, threads, |&(k, group), stop| {
+                let mut part = Vec::new();
+                for r in group {
+                    if stop.requested() || backed_range(&strs, r.clone(), &first_err, &mut part) {
+                        break;
                     }
-                    part
-                })
+                }
+                *slots[k].lock().unwrap_or_else(PoisonError::into_inner) = part;
             })
-            .map_err(|e| crate::interrupt::pool_error(&e))?;
+        });
         // Back on the calling thread (attached): every PyBackedStr is dropped
         // here, and the error of the lowest failing index is raised here.
+        let parts = slots
+            .into_iter()
+            .map(|m| m.into_inner().unwrap_or_else(PoisonError::into_inner));
+        let parts: Vec<Vec<PyBackedStr>> = parts.collect();
+        done.map_err(|e| crate::interrupt::pool_error(&e))?;
         let failed = first_err.into_inner();
         if failed == usize::MAX {
-            parts.into_iter().flatten().collect()
+            let mut out = Vec::with_capacity(strs.len());
+            for (k, part) in parts.into_iter().enumerate() {
+                if k > 0 {
+                    py.check_signals()?;
+                }
+                out.extend(part);
+            }
+            out
         } else {
             drop(parts);
             match backed(strs[failed].bind(py), Some(failed)) {
@@ -265,8 +295,9 @@ fn attach_ranges(lens: &[usize], chunk: usize) -> Vec<Range<usize>> {
 /// The one place a pool worker attaches to the interpreter. `clippy.toml`
 /// bans `Python::attach` because kernels must be pure Rust; this is not a
 /// kernel but argument extraction, and it is deadlock-free because:
-/// - only [`docs_par`] calls it, from `py.detach`, so the calling thread holds
-///   no thread state (and on GIL builds no GIL) while it waits for the pool.
+/// - only [`docs_par`] calls it, from `interrupt::detach_batch`, so the calling
+///   thread holds no thread state (and on GIL builds no GIL) while it waits
+///   for the pool; it attaches only for its Ctrl-C check, between waits.
 ///   Waiting on the pool while attached would deadlock with a stop-the-world
 ///   request (it blocks the workers' attach), so nothing may do that;
 /// - it runs only when `sys._is_gil_enabled()` was false; if an extension

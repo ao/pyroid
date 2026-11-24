@@ -99,6 +99,8 @@ def _version_check() -> None:
         "dateutil",
         f"python-dateutil=={DATEUTIL_VERSION}",
         same=tuple(f"python-dateutil=={v}" for v in DATEUTIL_VERSIONS[1:]),
+        # Any release from 2.8.2 gives the same results: the newest 2.x first, as the smaller step.
+        install=f"python-dateutil=={DATEUTIL_VERSIONS[2]} or python-dateutil=={DATEUTIL_VERSION}",
     )
 
 

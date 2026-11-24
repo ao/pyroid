@@ -6,8 +6,10 @@ markers and requirements that pip, setuptools and hatchling use. Its version par
 pattern and range engine, marker and requirement parsers and name helpers are ported function by
 function, so pyroid gives the same parsing, ordering, hashes, strings and exceptions as packaging
 26.3 ([parity](../compatibility.md#packaging)). Its objects mix with packaging's: they compare
-and hash equal with any packaging release from 24.2 to 26.3, and packaging 26's own code accepts
-them ([interop](#interop)).
+and hash equal with any packaging release from 24.2 to 26.3. packaging's own code accepts them
+from packaging 26 on; with 24.2 or 25.0 installed, give it strings instead
+(`SpecifierSet(">=1").contains(v)` raises `TypeError` for a pyroid `Version`; see
+[interop](#interop)).
 
 On a dedicated AWS EC2 c7i.4xlarge (Intel Xeon, CPython 3.12), pyroid parses versions 3 to 8×
 faster than packaging 26.3, answers `SpecifierSet.contains` 8× faster, filters a project's release
@@ -121,6 +123,8 @@ pyroid's objects meet packaging's in your code, in packaging's own modules (`ran
    subclasses of pyroid's classes, report packaging's class as `__class__`.
    `isinstance(v, packaging.version.Version)` is then true, and packaging's own code accepts
    them: `packaging.specifiers.SpecifierSet(">=1").contains(v)` would otherwise be `False`.
+   With 24.2 or 25.0, which pyroid's classes do not claim, that call raises `TypeError`
+   (`expected string or bytes-like object`): pass `str(v)` there.
    `type(v)` stays your class; in a subclass, make new objects with `type(self)(...)`, since
    `self.__class__(...)` makes one of packaging's.
 3. They have the private attributes that packaging's modules read (`Version._key`, `_epoch`,

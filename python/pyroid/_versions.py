@@ -27,7 +27,7 @@ from types import FrameType
 
 from pyroid._pyroid import VersionMismatchWarning
 
-__all__ = ["check", "distribution", "follow_installed", "quiet"]
+__all__ = ["at_startup", "check", "distribution", "follow_installed", "quiet"]
 
 _LOCK = threading.Lock()
 # The libraries (top-level module names) already checked in this process.
@@ -39,6 +39,10 @@ _FOLLOWED: contextvars.ContextVar[frozenset[str]] = contextvars.ContextVar(
 # Checks record the library without warning, in this context (quiet).
 _QUIET: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "pyroid._versions.quiet", default=False
+)
+# Checks run before the user's program (pyroid run, the start-up hook), in this context.
+_STARTUP: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "pyroid._versions.startup", default=False
 )
 _MISSING = object()
 
@@ -66,6 +70,7 @@ def check(
     same: Collection[str] = (),
     modes: Mapping[str, str] | None = None,
     distributions: Sequence[str] = (),
+    install: str | None = None,
 ) -> None:
     """Warn once per process if the installed `library` is not the `release` `module` reproduces.
 
@@ -84,6 +89,8 @@ def check(
             :func:`follow_installed` is in effect for `library` (the caller picks the mode).
         distributions: More distributions that install `library` (other builds), looked up
             after the ones named in `release`, `same` and `modes`.
+        install: What the warning says to install, if not `release`:
+            ``"python-dateutil==2.9.0.post0 or python-dateutil==4.0.0"``.
 
     Warns:
         VersionMismatchWarning: The first distribution found is another release. The message
@@ -103,15 +110,18 @@ def check(
     dist, _, version = found.partition("==")
     advice = (modes or {}).get(found)
     if advice is None:
-        todo = f"Install {release} to compare like for like"
+        todo = f"Install {install or release} to compare like for like"
     elif library in _FOLLOWED.get():
         return
     else:
         todo = f"Pass {advice} to reproduce it"
     name, _, wanted = release.partition("==")
+    # Before the program runs, its warnings filters are not set yet; -W and PYTHONWARNINGS are
+    # (they can match the message, not pyroid's class: Python reads them before site-packages).
+    silence = f"PYTHONWARNINGS='ignore:{module} reproduces'" if _STARTUP.get() else _SILENCE
     _warn(
         f"{module} reproduces {name} {wanted}, but {dist} {version} is installed: results can "
-        f"differ from it. {todo} (or silence this with {_SILENCE})."
+        f"differ from it. {todo} (or silence this with {silence})."
     )
 
 
@@ -247,12 +257,15 @@ def _metadata_version(path: str) -> str:
 _COUNT_FRAMES = sys.version_info < (3, 12)
 
 
-def _warn(message: str) -> None:
-    """``warnings.warn(message, VersionMismatchWarning)`` at the first frame outside pyroid."""
+def _warn(message: str, category: type[Warning] = VersionMismatchWarning) -> None:
+    """``warnings.warn(message, category)`` at the first frame outside pyroid and importlib.
+
+    pyroid.sqlparse warns this way about an installed release too old to share its classes.
+    """
     if sys.version_info >= (3, 12) and not _COUNT_FRAMES:
-        warnings.warn(message, VersionMismatchWarning, skip_file_prefixes=_SKIPPED)
+        warnings.warn(message, category, skip_file_prefixes=_SKIPPED)
     else:
-        warnings.warn(message, VersionMismatchWarning, stacklevel=_stacklevel(sys._getframe()))
+        warnings.warn(message, category, stacklevel=_stacklevel(sys._getframe()))
 
 
 def _stacklevel(frame: FrameType) -> int:
@@ -300,3 +313,17 @@ def quiet() -> Iterator[None]:
         yield
     finally:
         _QUIET.reset(token)
+
+
+@contextlib.contextmanager
+def at_startup() -> Iterator[None]:
+    """In this block, checks run before the user's program (``pyroid run``, the start-up hook).
+
+    Their advice then names ``PYTHONWARNINGS``, which applies from the start, instead of
+    ``warnings.simplefilter``, which the program would call too late.
+    """
+    token = _STARTUP.set(True)
+    try:
+        yield
+    finally:
+        _STARTUP.reset(token)

@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use pyo3::exceptions::{PyIndexError, PyNotImplementedError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedStr;
-use pyo3::types::{PyBool, PyList, PyString, PyTuple};
+use pyo3::types::{PyBool, PyList, PyString};
 use pyroid_core::columnar::BoolBuffers;
 use pyroid_core::dedup::exact::normalized_hash;
 use pyroid_core::dedup::{
@@ -320,14 +320,16 @@ fn token_signatures(
 }
 
 fn signatures_to_py<'py>(py: Python<'py>, sigs: &[Signature]) -> PyResult<Bound<'py, PyList>> {
-    let items = sigs
-        .iter()
-        .map(|s| match s {
-            None => Ok(py.None().into_bound(py)),
-            Some(v) => Ok(PyList::new(py, v.iter())?.into_any()),
-        })
-        .collect::<PyResult<Vec<_>>>()?;
-    PyList::new(py, items)
+    // A check per 65,536 hashes made, not per that many documents.
+    let mut checks = crate::arrow::Checks::default();
+    let items = sigs.iter().map(|s| match s {
+        None => Ok(py.None().into_bound(py)),
+        Some(v) => {
+            checks.tick(py, v.len())?;
+            Ok(PyList::new(py, v.iter())?.into_any())
+        }
+    });
+    crate::arrow::collect::<PyList>(py, sigs.len(), items)
 }
 
 /// datatrove's MinHash signature of each document (flat, bucket by bucket).
@@ -389,8 +391,11 @@ fn mask_like<'py>(
         TextInput::Str(_) => PyBool::new(py, values.first().copied().flatten().unwrap_or(true))
             .to_owned()
             .into_any(),
-        TextInput::List(_) => PyList::new(py, plain())?.into_any(),
-        TextInput::Tuple(_) => PyTuple::new(py, plain())?.into_any(),
+        TextInput::List(_) | TextInput::Tuple(_) => {
+            let items = plain().map(|v| Ok(PyBool::new(py, v).to_owned().into_any()));
+            let tuple = matches!(input, TextInput::Tuple(_));
+            crate::arrow::collect_seq(py, tuple, values.len(), items)?
+        }
         TextInput::Arrow(strings) => {
             let mut chunks = Vec::with_capacity(strings.chunks.len());
             let mut start = 0;
@@ -1476,7 +1481,7 @@ mod files {
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
 
-    use pyo3::exceptions::{PyOSError, PyValueError};
+    use pyo3::exceptions::PyValueError;
     use pyo3::prelude::*;
     use pyo3::types::PyDict;
     use pyroid_core::dedup::TokenizeError;
@@ -1486,7 +1491,7 @@ mod files {
 
     use super::{NativeConfig, lock};
     use crate::batch::{BatchError, doc_count, fill_rows};
-    use crate::errors::with_note;
+    use crate::errors::{os_error, with_note};
     use crate::input::{Threads, ThreadsArg, texts_and_threads, threads};
 
     const MIB: usize = 1 << 20;
@@ -1495,34 +1500,12 @@ mod files {
     /// `FileNotFoundError`); without an errno, the `io::Error`'s own class
     /// with the path in the message.
     fn io_error(py: Python<'_>, path: &Path, err: io::Error) -> PyErr {
-        if let Some(code) = err.raw_os_error() {
-            let built = (|| -> PyResult<PyErr> {
-                let oserror = py.get_type::<PyOSError>();
-                let exc = if cfg!(windows) {
-                    // A Windows error (5 = ERROR_ACCESS_DENIED), not an errno ("[Errno 5]
-                    // Input/output error"): as OSError's winerror it gives the errno and
-                    // the subclass. io::Error's Display appends " (os error N)", and
-                    // CPython's own messages have no trailing period.
-                    let msg = err.to_string();
-                    let strerror = msg
-                        .strip_suffix(&format!(" (os error {code})"))
-                        .unwrap_or(&msg)
-                        .trim_end_matches(['.', ' ']);
-                    oserror.call1((code, strerror, path.as_os_str(), code))?
-                } else {
-                    let strerror = py.import("os")?.call_method1("strerror", (code,))?;
-                    oserror.call1((code, strerror, path.as_os_str()))?
-                };
-                Ok(PyErr::from_value(exc))
-            })();
-            if let Ok(e) = built {
-                return e;
-            }
-        }
-        PyErr::from(io::Error::new(
-            err.kind(),
-            format!("{}: {err}", path.display()),
-        ))
+        os_error(py, &err, path.as_os_str()).unwrap_or_else(|| {
+            PyErr::from(io::Error::new(
+                err.kind(),
+                format!("{}: {err}", path.display()),
+            ))
+        })
     }
 
     fn files_err(py: Python<'_>, e: MinhashFileError) -> PyErr {

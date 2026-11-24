@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
-import os
 import sys
 import types
-import warnings
+
+from pyroid import _versions
 
 SQLPARSE_VERSION = "0.6.1"
 
@@ -44,8 +44,6 @@ CLASSES = (
     "Values",
     "Command",
 )
-
-_PYROID_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _pyroids(mod: types.ModuleType) -> bool:
@@ -91,19 +89,6 @@ SHARE_LEXER = REAL is not None and REAL_VERSION == SQLPARSE_VERSION
 NEWLINE_SLOT = REAL is None or hasattr(REAL.sql.Token, "is_newline")
 
 
-def _stacklevel() -> int:
-    """The ``stacklevel`` of the first frame outside pyroid and importlib."""
-    frame: types.FrameType | None = sys._getframe(1)
-    level = 1
-    while frame is not None:
-        name = frame.f_code.co_filename
-        if not name.startswith((_PYROID_DIR, "<frozen importlib")):
-            return level
-        frame = frame.f_back
-        level += 1
-    return 1
-
-
 def _warn_classes() -> None:
     """Another release is installed whose classes pyroid cannot share (older than 0.5.0).
 
@@ -112,12 +97,13 @@ def _warn_classes() -> None:
     """
     if REAL is not None or REAL_VERSION is None or REAL_VERSION == SQLPARSE_VERSION:
         return
-    warnings.warn(
+    # At the user's import line, as the VersionMismatchWarning after it: counting frames here
+    # pointed past it (sys:1), since warnings.warn skips importlib's frames itself.
+    _versions._warn(
         f"sqlparse {REAL_VERSION} is older than 0.5.0, so pyroid.sqlparse builds its trees from "
         f"its own copies of sqlparse {SQLPARSE_VERSION}'s token classes: isinstance checks "
         "against sqlparse.sql fail on them, and pyroid.patch('sqlparse') refuses to patch it.",
         RuntimeWarning,
-        stacklevel=_stacklevel(),
     )
 
 

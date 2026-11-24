@@ -80,7 +80,7 @@ def sig_files(folder: str | os.PathLike[str], bucket: int) -> list[str]:
         return []
     names = sorted(
         p.name
-        for p in d.iterdir()
+        for p in _io.iterdir(d)
         if p.name.endswith(SIG_SUFFIX) and not p.name.startswith(".") and p.is_file()
     )
     return [str(d / n) for n in names]
@@ -96,7 +96,9 @@ def dups_files(folder: str | os.PathLike[str]) -> list[str]:
     return [
         str(d / n)
         for n in sorted(
-            p.name for p in d.iterdir() if p.name.endswith(".dups") and not p.name.startswith(".")
+            p.name
+            for p in _io.iterdir(d)
+            if p.name.endswith(".dups") and not p.name.startswith(".")
         )
     ]
 
@@ -158,7 +160,7 @@ def run_bucket(
     first = files[0] if files else None
     lo, hi = _native._minhash_hash_range(first, native, unit.worker, unit.workers_per_bucket)
     dest = Path(out) / dups_name(unit.bucket, unit.worker)
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    _io.makedirs(dest.parent)
     pairs: int = _native._minhash_buckets(
         files, str(dest), native, hash_min=lo, hash_max=hi, memory_budget=memory, max_open=max_open
     )

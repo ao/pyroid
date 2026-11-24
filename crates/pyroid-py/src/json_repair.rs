@@ -10,12 +10,13 @@ use std::borrow::Cow;
 use std::sync::OnceLock;
 
 use pyo3::exceptions::{PyAssertionError, PyRecursionError, PyUnicodeEncodeError, PyValueError};
+use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBool, PyBytes, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple, PyType};
 use pyroid_core::json_repair::chars::{self, CharProps, UnicodeVersion};
 use pyroid_core::json_repair::dumps::{DumpError, DumpOptions};
-use pyroid_core::json_repair::value::{Int, ObjectIntoIter, Value};
+use pyroid_core::json_repair::value::{Constant, Int, ObjectIntoIter, Value};
 use pyroid_core::json_repair::{
     self as kernel, LogEntry, MAX_DEPTH, ParseError, RepairError, RepairOptions, Repaired,
 };
@@ -147,12 +148,34 @@ enum Frame<'py> {
     },
 }
 
+/// `json.decoder`'s `NaN`, `PosInf` and `NegInf`: the objects `json.JSONDecoder` returns
+/// for the `NaN`, `Infinity` and `-Infinity` tokens (json_repair keeps them).
+static JSON_CONSTANTS: PyOnceLock<[Py<PyAny>; 3]> = PyOnceLock::new();
+
+fn json_constant(py: Python<'_>, c: Constant) -> PyResult<Bound<'_, PyAny>> {
+    let all = JSON_CONSTANTS.get_or_try_init(py, || -> PyResult<_> {
+        let m = py.import("json.decoder")?;
+        Ok([
+            m.getattr("NaN")?.unbind(),
+            m.getattr("PosInf")?.unbind(),
+            m.getattr("NegInf")?.unbind(),
+        ])
+    })?;
+    let i = match c {
+        Constant::NaN => 0,
+        Constant::PosInf => 1,
+        Constant::NegInf => 2,
+    };
+    Ok(all[i].bind(py).clone())
+}
+
 fn scalar_to_py<'py>(py: Python<'py>, value: &Value) -> PyResult<Bound<'py, PyAny>> {
     Ok(match value {
         Value::Null => py.None().into_bound(py),
         Value::Bool(b) => PyBool::new(py, *b).to_owned().into_any(),
         Value::Int(i) => py_int(py, i)?,
         Value::Float(f) => PyFloat::new(py, *f).into_any(),
+        Value::Constant(c) => json_constant(py, *c)?,
         Value::Str(s) => py_str(py, s)?.into_any(),
         Value::Array(_) | Value::Object(_) => unreachable!("containers are frames"),
     })
@@ -273,6 +296,49 @@ fn surrogatepass_bytes<'py>(text: &Bound<'py, PyString>) -> PyResult<Bound<'py, 
         .cast_into::<PyBytes>()?)
 }
 
+/// The `str` methods json_repair calls on its input (`startswith` and `len` through
+/// `json.loads`). A subclass that overrides one is delegated: the port reads the
+/// characters themselves.
+const STR_HOOKS: [&str; 5] = ["__getitem__", "__len__", "__iter__", "find", "startswith"];
+
+/// The first of [`STR_HOOKS`] that `text` (a `str` subclass instance) overrides, in
+/// its class or a base class below `str`, or as an instance attribute.
+fn overridden_str_hook(text: &Bound<'_, PyAny>) -> PyResult<Option<&'static str>> {
+    let py = text.py();
+    let str_type = py.get_type::<PyString>();
+    for cls in text.get_type().mro().iter() {
+        if cls.is(&str_type) {
+            break;
+        }
+        let namespace = cls.getattr(intern!(py, "__dict__"))?;
+        for name in STR_HOOKS {
+            if namespace.contains(name)? {
+                return Ok(Some(name));
+            }
+        }
+    }
+    // Plain methods (not the dunders, which Python looks up on the type) can be
+    // set on the instance.
+    if let Ok(namespace) = text.getattr(intern!(py, "__dict__")) {
+        for name in ["find", "startswith"] {
+            if namespace.contains(name)? {
+                return Ok(Some(name));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// `_overridden_str_hook(text)`: the name of the `str` method that `text`'s class
+/// overrides among those json_repair calls, or `None` (always for an exact `str`).
+#[pyfunction]
+fn _overridden_str_hook(text: &Bound<'_, PyAny>) -> PyResult<Option<&'static str>> {
+    if text.is_exact_instance_of::<PyString>() {
+        return Ok(None);
+    }
+    overridden_str_hook(text)
+}
+
 /// The kernel text for a Python str: its UTF-8, or (with lone surrogates) the
 /// remapped chars.
 enum Text<'py> {
@@ -385,13 +451,51 @@ enum BatchOut {
     Failed(RepairError),
 }
 
-/// `repair_json(doc)` for every document of a str, list or tuple on the shared
-/// pool. Returns `(result, unsupported)`: the result in the input's kind (an
-/// unchanged document is the original object; delegated ones are `None`) and
-/// the indices the shim must delegate to json_repair. For Arrow input,
-/// `delegate(doc)` gives those documents' results (`unsupported` is empty).
+/// The kernel text of a batch document, or `Unsupported` for one that goes to the
+/// delegate: every one with `python`, else a str subclass that overrides a method
+/// json_repair calls on it.
+fn batch_text<'a>(s: &'a Bound<'_, PyString>, python: bool) -> PyResult<Text<'a>> {
+    if python || (!s.is_exact_instance_of::<PyString>() && overridden_str_hook(s)?.is_some()) {
+        return Ok(Text::Unsupported);
+    }
+    text_of(s)
+}
+
+/// The batch results as Python objects, in document order, so that the first
+/// failing document raises, as in a loop (a delegated one included). The note
+/// names its index.
+fn finish_one<'py>(
+    py: Python<'py>,
+    i: usize,
+    out: BatchOut,
+    orig: &Bound<'py, PyAny>,
+    delegate: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    Ok(match out {
+        BatchOut::Same => orig.clone(),
+        BatchOut::New(s) => py_str(py, &s)?.into_any(),
+        BatchOut::Failed(e) => match repair_err(py, e) {
+            Some(err) => Err(err),
+            None => delegate.call1((orig,)),
+        }
+        .map_err(|err| {
+            with_note(
+                py,
+                err,
+                format!("pyroid: while repairing the document at index {i}"),
+            )
+        })?,
+    })
+}
+
+/// `repair_json(doc)` for every document of a str, list, tuple or Arrow column, on
+/// the shared pool; the result is in the input's kind (an unchanged document is
+/// the original object). A document the port does not handle (a char reserved
+/// for surrogates, a str subclass overriding a method json_repair calls) gets
+/// `delegate(doc)`, called in document order after the native ones ran; with
+/// `python`, every document does (the shim's Python route).
 #[pyfunction]
-#[pyo3(signature = (texts, /, skip_json_loads, stream_stable, strict, max_int_digits, dump, *, threads=None, delegate=None))]
+#[pyo3(signature = (texts, /, skip_json_loads, stream_stable, strict, max_int_digits, dump, *, delegate, python=false, threads=None))]
 #[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 fn repair_batch<'py>(
     py: Python<'py>,
@@ -401,9 +505,10 @@ fn repair_batch<'py>(
     strict: bool,
     max_int_digits: usize,
     dump: Option<&DumpConfig>,
+    delegate: Bound<'py, PyAny>,
+    python: bool,
     threads: Option<Threads>,
-    delegate: Option<Bound<'py, PyAny>>,
-) -> PyResult<(Bound<'py, PyAny>, Vec<usize>)> {
+) -> PyResult<Bound<'py, PyAny>> {
     let opts = options(
         skip_json_loads,
         false,
@@ -424,46 +529,19 @@ fn repair_batch<'py>(
             Err(e) => BatchOut::Failed(e),
         }
     };
-    let finish = |outs: Vec<BatchOut>,
-                  originals: &[Bound<'py, PyAny>]|
-     -> PyResult<(Vec<Bound<'py, PyAny>>, Vec<usize>)> {
-        let mut items = Vec::with_capacity(outs.len());
-        let mut unsupported = Vec::new();
-        for (i, (out, orig)) in outs.into_iter().zip(originals).enumerate() {
-            items.push(match out {
-                BatchOut::Same => orig.clone(),
-                BatchOut::New(s) => py_str(py, &s)?.into_any(),
-                BatchOut::Failed(e) => {
-                    if let Some(err) = repair_err(py, e) {
-                        return Err(with_note(
-                            py,
-                            err,
-                            format!("pyroid: while repairing the document at index {i}"),
-                        ));
-                    }
-                    unsupported.push(i);
-                    py.None().into_bound(py)
-                }
-            });
-        }
-        Ok((items, unsupported))
-    };
-
     if let Ok(s) = texts.cast::<PyString>() {
-        let t = text_of(s)?;
+        let t = batch_text(s, python)?;
         let original = match &t {
             Text::Utf8(u) => Some(*u),
             _ => None,
         };
         let out = one(&t, original);
-        let (mut items, unsupported) = finish(vec![out], &[s.clone().into_any()])?;
-        return Ok((items.pop().expect("one"), unsupported));
+        return finish_one(py, 0, out, s.as_any(), &delegate);
     }
     let is_list = texts.is_instance_of::<PyList>();
     if !is_list && !texts.is_instance_of::<PyTuple>() {
         // Arrow input: strings in, `pyroid.Column` out.
-        return arrow_batch(py, texts, &opts, &dump, threads, delegate.as_ref())
-            .map(|c| (c, Vec::new()));
+        return arrow_batch(py, texts, &opts, &dump, threads, &delegate, python);
     }
     let items: Vec<Bound<'py, PyAny>> = if is_list {
         list_items(texts.cast::<PyList>()?).iter().collect()
@@ -485,7 +563,7 @@ fn repair_batch<'py>(
         })
         .collect::<PyResult<_>>()?;
     for s in &strs {
-        docs.push(text_of(s)?);
+        docs.push(batch_text(s, python)?);
     }
     let t = crate::input::threads(threads);
     let results = crate::interrupt::detach_batch(py, || {
@@ -498,44 +576,49 @@ fn repair_batch<'py>(
         })
     })
     .map_err(|e| BatchError::from(e).into_pyerr(py))?;
-    let (items, unsupported) = finish(results, &items)?;
-    let result = if is_list {
-        PyList::new(py, items)?.into_any()
-    } else {
-        PyTuple::new(py, items)?.into_any()
-    };
-    Ok((result, unsupported))
+    let n = results.len();
+    let finished = results
+        .into_iter()
+        .zip(&items)
+        .enumerate()
+        .map(|(i, (out, orig))| finish_one(py, i, out, orig, &delegate));
+    crate::arrow::collect_seq(py, !is_list, n, finished)
 }
 
 /// `repair_batch` for Arrow string input (a `pyroid.Column` of strings out).
-/// A document the port does not handle goes to `delegate(doc)` (json_repair's
-/// `repair_json` with the call's options), when given.
+/// A document the port does not handle, or every one with `python`, goes to
+/// `delegate(doc)` (json_repair's `repair_json` with the call's options, or the
+/// shim's Python route), row by row in order.
 fn arrow_batch<'py>(
     py: Python<'py>,
     texts: &Bound<'py, PyAny>,
     opts: &RepairOptions,
     dump: &DumpOptions,
     threads_arg: Option<Threads>,
-    delegate: Option<&Bound<'py, PyAny>>,
+    delegate: &Bound<'py, PyAny>,
+    python: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let input = text_arg(texts, threads_arg, "texts")?;
     try_transform(
         py,
         input,
         threads_arg,
-        |s| match kernel::repair_json(s, opts, dump) {
-            Ok(out) if out == s => Ok(Cow::Borrowed(s)),
-            // The value holds a lone surrogate (stored remapped), which a
-            // UTF-8 Arrow column cannot hold.
-            Ok(out) if chars::contains_reserved(&out) => Err(ArrowFailure::Surrogate(out)),
-            Ok(out) => Ok(Cow::Owned(out)),
-            Err(e) => Err(ArrowFailure::Repair(e)),
-        },
-        |py, row, text, failure| match (failure, delegate) {
-            (ArrowFailure::Repair(e), Some(delegate)) if is_unsupported(&e) => {
-                delegated_row(py, delegate, row, text)
+        |s| {
+            if python {
+                return Err(ArrowFailure::Repair(RepairError::Unsupported));
             }
-            (failure, _) => Err(arrow_error(py, row, failure)),
+            match kernel::repair_json(s, opts, dump) {
+                Ok(out) if out == s => Ok(Cow::Borrowed(s)),
+                // The value holds a lone surrogate (stored remapped), which a
+                // UTF-8 Arrow column cannot hold.
+                Ok(out) if chars::contains_reserved(&out) => Err(ArrowFailure::Surrogate(out)),
+                Ok(out) => Ok(Cow::Owned(out)),
+                Err(e) => Err(ArrowFailure::Repair(e)),
+            }
+        },
+        |py, row, text, failure| match failure {
+            ArrowFailure::Repair(e) if is_unsupported(&e) => delegated_row(py, delegate, row, text),
+            failure => Err(arrow_error(py, row, failure)),
         },
     )
 }
@@ -622,6 +705,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_set_unicode_version, &m)?)?;
     m.add_function(wrap_pyfunction!(repair, &m)?)?;
     m.add_function(wrap_pyfunction!(repair_batch, &m)?)?;
+    m.add_function(wrap_pyfunction!(_overridden_str_hook, &m)?)?;
     m.add_class::<DumpConfig>()?;
     m.add("NestingError", nesting_error_type(py)?)?;
     m.add("MAX_DEPTH", MAX_DEPTH)?;

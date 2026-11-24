@@ -17,7 +17,7 @@ pyroid has no runtime dependencies. Extras:
 | `pyroid[hf]` | `datasets>=3`, `pyarrow>=18`, `numpy>=1.26` | the [Hugging Face `datasets` helpers](guides/huggingface.md) in `pyroid.integrations.hf` |
 | `pyroid[warc]` | `faust-cchardet`, `python-magic` | datatrove's page decoding in [`pyroid.warc.iter_documents`](guides/warc.md), its `WarcReader` drop-in and `pyroid clean --recipe fineweb-warc`: faust-cchardet guesses the charset of pages that are not UTF-8, and python-magic (which needs the libmagic library) types records without `WARC-Identified-Payload-Type`. Both are imported only when a record needs them, as datatrove imports them. `pyroid.warc.ArchiveIterator` needs neither. |
 | `pyroid[nemo]` | `numpy>=1.26` | [`pyroid.nemo`](guides/nemo-curator.md), which returns numpy arrays of scores. NeMo Curator itself is not pulled in. |
-| `pyroid[all]` | all of the above | everything; on CPython 3.15 it leaves out `datatrove`, `hf` and `warc` (see below) |
+| `pyroid[all]` | all of the above | everything; on CPython 3.15 it leaves out `datatrove`, `hf` and `warc`, and on 3.14t its orjson builds from source (see below) |
 
 Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
 `pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.jmespath`,
@@ -25,10 +25,13 @@ Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.fil
 `pyroid.yaml`, `pyroid.dateutil.parser`, `pyroid.difflib`, `pyroid.packaging`, `pyroid.sqlparse`,
 `pyroid.langdetect` and `pyroid.patch()` need none of them.
 
-Some dependencies of the `datatrove`, `hf` and `warc` extras (orjson, tokenizers, PyYAML and
-faust-cchardet) publish no wheels for CPython 3.15 and 3.15t yet, and orjson none for 3.14t. There
-pip builds them from source: faust-cchardet needs a C++ compiler, and orjson and tokenizers a Rust
-toolchain. `pyroid[all]` skips those three extras on 3.15; name them to build them anyway.
+Some dependencies of the `datatrove`, `hf` and `warc` extras publish no wheels for some
+interpreters yet: PyYAML and faust-cchardet for CPython 3.15 and 3.15t, tokenizers for 3.15t, and
+orjson for the free-threaded 3.14t and 3.15t. There pip builds them from source: faust-cchardet
+needs a C++ compiler, and orjson and tokenizers a Rust toolchain. `pyroid[all]` skips those three
+extras on 3.15 and 3.15t; name them to build them anyway. On 3.14t it keeps them, because no
+environment marker tells a free-threaded build from a regular one, so pip builds orjson there;
+`pip install "pyroid[fasttext,datasketch,cli,nemo,hf,warc]"` installs the rest from wheels.
 pyroid's own wheels cover every interpreter below.
 
 Optional libraries, needed only by the features that use them:

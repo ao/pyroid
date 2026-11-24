@@ -54,6 +54,7 @@ class Case:
     patch: str | None = None  # the pyroid.patch() name, if there is one
     numpy: bool = False  # the pyroid module needs numpy
     imports: bool = False  # the pyroid module imports the incumbent at import, if it can
+    install: str | None = None  # what the warning says to install, if not dist==version
 
 
 def _fixed(version: str) -> Callable[[], str]:
@@ -250,6 +251,8 @@ CASES = [
         ("dateutil",),
         patch="dateutil",
         imports=True,  # pyroid.dateutil.parser uses dateutil.tz's classes when it imports
+        # It said 4.0.0 only, though every release from 2.8.2 gives the same results.
+        install="python-dateutil==2.9.0.post0 or python-dateutil==4.0.0",
     ),
     Case(
         "jmespath",
@@ -307,7 +310,7 @@ def _params(cases: Sequence[Case]) -> list[Any]:
 def message(case: Case, found: str, *, dist: str | None = None, todo: str | None = None) -> str:
     """The warning's text when `found` of `dist` (default: the case's) is installed."""
     version = case.version()
-    todo = todo or f"Install {case.dist}=={version} to compare like for like"
+    todo = todo or f"Install {case.install or f'{case.dist}=={version}'} to compare like for like"
     return (
         f"{case.subject} reproduces {case.dist} {version}, but {dist or case.dist} {found} is "
         f"installed: results can differ from it. {todo} (or silence this with {SILENCE})."
@@ -746,3 +749,54 @@ def test_pyroid_run_warns_once_per_process_tree(tmp_path: Path) -> None:
     assert proc.stdout.split() == ["parent", "True", "child", "True"]
     assert proc.stderr.count("VersionMismatchWarning: ") == 1, proc.stderr
     assert "pyroid.ftfy reproduces ftfy 6.3.1, but ftfy 6.2.0 is installed" in proc.stderr
+    # It comes before the script, so the advice is one that works from the start (the script's
+    # warnings.simplefilter would run too late), and it does silence it.
+    advice = "PYTHONWARNINGS='ignore:pyroid.ftfy reproduces'"
+    assert f"(or silence this with {advice})." in proc.stderr, proc.stderr
+    env["PYTHONWARNINGS"] = advice.partition("=")[2].strip("'")
+    proc = subprocess.run(
+        [sys.executable, "-c", run, "-p", "ftfy", str(script)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=180,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.split() == ["parent", "True", "child", "True"]
+    assert "VersionMismatchWarning" not in proc.stderr, proc.stderr
+    assert "PatchWarning: ftfy patched with pyroid.ftfy" in proc.stderr
+
+
+def test_start_up_hook_warns_with_plain_lines(tmp_path: Path) -> None:
+    """``PYROID_PATCH`` + ``PYTHONPATH`` without pyroid run: one line per warning, not pointing
+    into pyroid's sitecustomize.py, and the user's ``PYTHONPATH`` entries still import."""
+    from pyroid.integrations import _patch
+
+    stand_in(tmp_path / "site", "ftfy", "ftfy", "6.2.0")
+    script = tmp_path / "script.py"
+    script.write_text(SCRIPT, encoding="utf-8")
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("PYTHONPATH", "PYROID_PATCH", "_PYROID_PATCH_WARNED", "PYTHONWARNINGS")
+    }
+    env["PYROID_PATCH"] = "ftfy"
+    env["PYTHONPATH"] = os.pathsep.join([_patch.HOOK_DIR, str(tmp_path / "site")])
+    proc = subprocess.run(
+        [sys.executable, str(script)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=180,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.split() == ["parent", "True", "child", "True"]
+    assert proc.stderr.splitlines() == [
+        "pyroid: VersionMismatchWarning: pyroid.ftfy reproduces ftfy 6.3.1, but ftfy 6.2.0 is "
+        "installed: results can differ from it. Install ftfy==6.3.1 to compare like for like (or "
+        "silence this with PYTHONWARNINGS='ignore:pyroid.ftfy reproduces').",
+        "pyroid: PatchWarning: ftfy patched with pyroid.ftfy (from $PYROID_PATCH), in this "
+        "process and the Python processes it starts",
+    ]
