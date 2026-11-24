@@ -2,6 +2,34 @@
 
 All notable changes to pyroid are documented here. From 1.0.0 on, [release-please](https://github.com/googleapis/release-please) maintains this file from [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [1.1.0](https://github.com/ao/pyroid/compare/v1.0.1...v1.1.0) (2026-11-24)
+
+
+### Features
+
+* **dateutil:** pyroid.dateutil.parser, a drop-in for python-dateutil's parse and isoparse ([#22](https://github.com/ao/pyroid/issues/22)) ([37c5ff6](https://github.com/ao/pyroid/commit/37c5ff6dd95104c20ee741f823b62302a7b0f347))
+* **difflib:** pyroid.difflib, the standard library's difflib in Rust ([#23](https://github.com/ao/pyroid/issues/23)) ([b0f850f](https://github.com/ao/pyroid/commit/b0f850f3403103151c491f471c592841050aefa8))
+* **jmespath:** pyroid.jmespath, a drop-in for jmespath 1.1.0 ([#20](https://github.com/ao/pyroid/issues/20)) ([e51a6dd](https://github.com/ao/pyroid/commit/e51a6dd22a9726e7a601596364353532d5d7c413))
+* **langdetect:** pyroid.langdetect, a drop-in for langdetect 1.0.9 ([#29](https://github.com/ao/pyroid/issues/29)) ([445a4ec](https://github.com/ao/pyroid/commit/445a4ec28915ad29caddd56e0e137e05116adc62))
+* match json-repair 0.64.9, warn when an installed incumbent is another release, watch upstream weekly ([#15](https://github.com/ao/pyroid/issues/15)) ([675b0f9](https://github.com/ao/pyroid/commit/675b0f921121c4587e47bb364ead80a2a2229b2d))
+* **packaging:** pyroid.packaging, a drop-in for packaging 26.3 ([#24](https://github.com/ao/pyroid/issues/24)) ([b3b3539](https://github.com/ao/pyroid/commit/b3b3539cccf21beb4661780284f5b5100560b957))
+* pyroid.tabulate, a drop-in for tabulate 0.10.0 ([#19](https://github.com/ao/pyroid/issues/19)) ([1d1e13b](https://github.com/ao/pyroid/commit/1d1e13befb319218787fdf706f77bde9a5d34372))
+* **sqlparse:** pyroid.sqlparse, a drop-in for sqlparse 0.6.1 ([#27](https://github.com/ao/pyroid/issues/27)) ([1c0301f](https://github.com/ao/pyroid/commit/1c0301f9303f1fe52e27a72e915676f1c9f731e8))
+* **yaml:** add pyroid.yaml, a drop-in for PyYAML's safe loader and dumper ([#17](https://github.com/ao/pyroid/issues/17)) ([ee062f7](https://github.com/ao/pyroid/commit/ee062f7422970b8bfdab7a4aa7ba9707f9d51e06))
+
+
+### Bug Fixes
+
+* containers changed by other threads during a call, Ctrl-C in minhash_dedup, pyroid run without pyarrow ([#21](https://github.com/ao/pyroid/issues/21)) ([1f9e0d9](https://github.com/ao/pyroid/commit/1f9e0d94894b6cbffb02ca672d9ddae5eb7f5a04))
+* Ctrl-C and SIGTERM, sentence dedup, datasketch pickles, memory and the rest of the outside evaluation ([#18](https://github.com/ao/pyroid/issues/18)) ([3dc300b](https://github.com/ao/pyroid/commit/3dc300b6753510607e3eb3dbda2c37d2f16289d6))
+* the outside evaluation's findings (json_repair Arrow output, patched anyascii, first-run friction, fastText speed) ([#16](https://github.com/ao/pyroid/issues/16)) ([1455d38](https://github.com/ao/pyroid/commit/1455d38ca795043195458a9e2f06f8b71f347817))
+* Windows open errors, Ctrl-C during patch(), pyroid.Column as a sequence, CLI and json_repair fixes ([#36](https://github.com/ao/pyroid/issues/36)) ([3131d11](https://github.com/ao/pyroid/commit/3131d11cabb0598206a966299e23b26edf03d128))
+
+
+### Performance Improvements
+
+* **cli:** compress clean's spooled rows on a background thread ([#14](https://github.com/ao/pyroid/issues/14)) ([e02798d](https://github.com/ao/pyroid/commit/e02798dac80b505fb902f2acb3ff7d37c41e2776))
+
 ## [1.0.1](https://github.com/ao/pyroid/compare/v1.0.0...v1.0.1) (2026-11-14)
 
 
