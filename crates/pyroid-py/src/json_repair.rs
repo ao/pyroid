@@ -464,31 +464,28 @@ fn batch_text<'a>(s: &'a Bound<'_, PyString>, python: bool) -> PyResult<Text<'a>
 /// The batch results as Python objects, in document order, so that the first
 /// failing document raises, as in a loop (a delegated one included). The note
 /// names its index.
-fn finish_batch<'py>(
+fn finish_one<'py>(
     py: Python<'py>,
-    outs: Vec<BatchOut>,
-    originals: &[Bound<'py, PyAny>],
+    i: usize,
+    out: BatchOut,
+    orig: &Bound<'py, PyAny>,
     delegate: &Bound<'py, PyAny>,
-) -> PyResult<Vec<Bound<'py, PyAny>>> {
-    let mut items = Vec::with_capacity(outs.len());
-    for (i, (out, orig)) in outs.into_iter().zip(originals).enumerate() {
-        items.push(match out {
-            BatchOut::Same => orig.clone(),
-            BatchOut::New(s) => py_str(py, &s)?.into_any(),
-            BatchOut::Failed(e) => match repair_err(py, e) {
-                Some(err) => Err(err),
-                None => delegate.call1((orig,)),
-            }
-            .map_err(|err| {
-                with_note(
-                    py,
-                    err,
-                    format!("pyroid: while repairing the document at index {i}"),
-                )
-            })?,
-        });
-    }
-    Ok(items)
+) -> PyResult<Bound<'py, PyAny>> {
+    Ok(match out {
+        BatchOut::Same => orig.clone(),
+        BatchOut::New(s) => py_str(py, &s)?.into_any(),
+        BatchOut::Failed(e) => match repair_err(py, e) {
+            Some(err) => Err(err),
+            None => delegate.call1((orig,)),
+        }
+        .map_err(|err| {
+            with_note(
+                py,
+                err,
+                format!("pyroid: while repairing the document at index {i}"),
+            )
+        })?,
+    })
 }
 
 /// `repair_json(doc)` for every document of a str, list, tuple or Arrow column, on
@@ -539,8 +536,7 @@ fn repair_batch<'py>(
             _ => None,
         };
         let out = one(&t, original);
-        let mut items = finish_batch(py, vec![out], &[s.clone().into_any()], &delegate)?;
-        return Ok(items.pop().expect("one"));
+        return finish_one(py, 0, out, s.as_any(), &delegate);
     }
     let is_list = texts.is_instance_of::<PyList>();
     if !is_list && !texts.is_instance_of::<PyTuple>() {
@@ -580,12 +576,13 @@ fn repair_batch<'py>(
         })
     })
     .map_err(|e| BatchError::from(e).into_pyerr(py))?;
-    let items = finish_batch(py, results, &items, &delegate)?;
-    Ok(if is_list {
-        PyList::new(py, items)?.into_any()
-    } else {
-        PyTuple::new(py, items)?.into_any()
-    })
+    let n = results.len();
+    let finished = results
+        .into_iter()
+        .zip(&items)
+        .enumerate()
+        .map(|(i, (out, orig))| finish_one(py, i, out, orig, &delegate));
+    crate::arrow::collect_seq(py, !is_list, n, finished)
 }
 
 /// `repair_batch` for Arrow string input (a `pyroid.Column` of strings out).

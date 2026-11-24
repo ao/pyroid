@@ -201,3 +201,39 @@ pub fn collect<'py, T: Slots>(
     }
     Ok(fill.finish())
 }
+
+/// [`collect`] into a tuple if `tuple`, else a list: a batch's result in the
+/// caller's container kind.
+pub fn collect_seq<'py>(
+    py: Python<'py>,
+    tuple: bool,
+    len: usize,
+    items: impl IntoIterator<Item = PyResult<Bound<'py, PyAny>>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    Ok(if tuple {
+        collect::<PyTuple>(py, len, items)?.into_any()
+    } else {
+        collect::<PyList>(py, len, items)?.into_any()
+    })
+}
+
+/// Ctrl-C checks for a result whose items differ in size (a list of words
+/// per document): [`Checks::tick`] after each item, with the objects it
+/// made, checks once per [`CHECK_ITEMS`] objects.
+#[derive(Debug, Default)]
+pub struct Checks {
+    made: usize,
+}
+
+impl Checks {
+    /// Count an item of `objects` objects; check for Ctrl-C once enough were made.
+    #[inline]
+    pub fn tick(&mut self, py: Python<'_>, objects: usize) -> PyResult<()> {
+        self.made += objects + 1;
+        if self.made >= CHECK_ITEMS {
+            self.made = 0;
+            py.check_signals()?;
+        }
+        Ok(())
+    }
+}

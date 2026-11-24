@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use pyo3::exceptions::{PyIndexError, PyNotImplementedError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedStr;
-use pyo3::types::{PyBool, PyList, PyString, PyTuple};
+use pyo3::types::{PyBool, PyList, PyString};
 use pyroid_core::columnar::BoolBuffers;
 use pyroid_core::dedup::exact::normalized_hash;
 use pyroid_core::dedup::{
@@ -320,14 +320,16 @@ fn token_signatures(
 }
 
 fn signatures_to_py<'py>(py: Python<'py>, sigs: &[Signature]) -> PyResult<Bound<'py, PyList>> {
-    let items = sigs
-        .iter()
-        .map(|s| match s {
-            None => Ok(py.None().into_bound(py)),
-            Some(v) => Ok(PyList::new(py, v.iter())?.into_any()),
-        })
-        .collect::<PyResult<Vec<_>>>()?;
-    PyList::new(py, items)
+    // A check per 65,536 hashes made, not per that many documents.
+    let mut checks = crate::arrow::Checks::default();
+    let items = sigs.iter().map(|s| match s {
+        None => Ok(py.None().into_bound(py)),
+        Some(v) => {
+            checks.tick(py, v.len())?;
+            Ok(PyList::new(py, v.iter())?.into_any())
+        }
+    });
+    crate::arrow::collect::<PyList>(py, sigs.len(), items)
 }
 
 /// datatrove's MinHash signature of each document (flat, bucket by bucket).
@@ -389,8 +391,11 @@ fn mask_like<'py>(
         TextInput::Str(_) => PyBool::new(py, values.first().copied().flatten().unwrap_or(true))
             .to_owned()
             .into_any(),
-        TextInput::List(_) => PyList::new(py, plain())?.into_any(),
-        TextInput::Tuple(_) => PyTuple::new(py, plain())?.into_any(),
+        TextInput::List(_) | TextInput::Tuple(_) => {
+            let items = plain().map(|v| Ok(PyBool::new(py, v).to_owned().into_any()));
+            let tuple = matches!(input, TextInput::Tuple(_));
+            crate::arrow::collect_seq(py, tuple, values.len(), items)?
+        }
         TextInput::Arrow(strings) => {
             let mut chunks = Vec::with_capacity(strings.chunks.len());
             let mut start = 0;

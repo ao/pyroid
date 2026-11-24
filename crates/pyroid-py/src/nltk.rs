@@ -78,15 +78,18 @@ fn per_doc<'py, 'd, R>(
             .expect("one result");
         return one(0, r);
     }
-    let out = results
-        .iter()
-        .enumerate()
-        .map(|(i, r)| match r {
-            Some(r) => one(i, r),
-            None => Ok(py.None().into_bound(py)),
-        })
-        .collect::<PyResult<Vec<_>>>()?;
-    Ok(PyList::new(py, out)?.into_any())
+    // In place, with a Ctrl-C check per 65,536 objects made (a document's list
+    // holds many).
+    let mut checks = crate::arrow::Checks::default();
+    let out = results.iter().enumerate().map(|(i, r)| match r {
+        Some(r) => {
+            let v = one(i, r)?;
+            checks.tick(py, v.cast::<PyList>().map_or(0, PyListMethods::len))?;
+            Ok(v)
+        }
+        None => Ok(py.None().into_bound(py)),
+    });
+    Ok(crate::arrow::collect::<PyList>(py, results.len(), out)?.into_any())
 }
 
 /// Each document's text (`None` for an Arrow null), in input order.
@@ -320,11 +323,15 @@ fn decision<'py>(py: Python<'py>, d: &Decision, at: usize) -> PyResult<Bound<'py
 /// The documents of `text` as strs (`None` for Arrow nulls), for the calls the
 /// package hands to NLTK one document at a time.
 #[pyfunction]
-fn texts(text: TextInput) -> Vec<Option<String>> {
-    docs(&text)
-        .into_iter()
-        .map(|d| d.map(str::to_owned))
-        .collect()
+fn texts(py: Python<'_>, text: TextInput) -> PyResult<Bound<'_, PyList>> {
+    let docs = docs(&text);
+    let items = docs.iter().map(|d| {
+        Ok(match d {
+            Some(d) => PyString::new(py, d).into_any(),
+            None => py.None().into_bound(py),
+        })
+    });
+    crate::arrow::collect::<PyList>(py, docs.len(), items)
 }
 
 /// `TreebankWordTokenizer().tokenize` (`nltk=False`) or `NLTKWordTokenizer().tokenize`.

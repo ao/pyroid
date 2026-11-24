@@ -391,18 +391,15 @@ fn with_surrogates<'py>(
         })
     })
     .map_err(|e| BatchError::from(e).into_pyerr(py))?;
-    let mut fixed = Vec::with_capacity(outs.len());
-    for (item, out) in strs.iter().zip(outs) {
-        fixed.push(match out {
+    let len = outs.len();
+    let fixed = strs.iter().zip(outs).map(|(item, out)| {
+        Ok(match out {
             Cow::Borrowed(_) => item.clone(),
             Cow::Owned(v) => str_from_wtf8(py, &v)?,
-        });
-    }
-    Ok(if is_list {
-        PyList::new(py, fixed)?.into_any()
-    } else {
-        PyTuple::new(py, fixed)?.into_any()
-    })
+        }
+        .into_any())
+    });
+    crate::arrow::collect_seq(py, !is_list, len, fixed)
 }
 
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {

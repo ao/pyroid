@@ -16,6 +16,6 @@ mod import;
 mod record_batch;
 
 pub use column::{Chunk, Column, ColumnType, build_error};
-pub use fill::collect;
+pub use fill::{Checks, Fill, collect, collect_seq};
 pub use import::{ArrowStrings, StrChunk, StrType, import};
 pub use record_batch::{Field, RecordBatch, array_capsules, schema_capsule, stream_capsule};
