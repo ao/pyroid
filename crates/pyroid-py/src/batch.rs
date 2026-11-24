@@ -393,6 +393,38 @@ pub fn rows(input: &TextInput) -> Result<Vec<Option<&str>>, BatchError> {
     })
 }
 
+/// [`rows`] for a batch's attached setup: checks for Ctrl-C every
+/// [`CHECK_ROWS`] rows (an Arrow row is checked to be UTF-8 here).
+pub fn rows_checked<'a>(py: Python<'_>, input: &'a TextInput) -> PyResult<Vec<Option<&'a str>>> {
+    let mut out = Vec::with_capacity(doc_count(input));
+    let check = |i: usize| {
+        if i % CHECK_ROWS == CHECK_ROWS - 1 {
+            py.check_signals()
+        } else {
+            Ok(())
+        }
+    };
+    match input {
+        TextInput::Str(s) => out.push(Some(&**s)),
+        TextInput::List(d) | TextInput::Tuple(d) => {
+            for (i, s) in d.iter().enumerate() {
+                check(i)?;
+                out.push(Some(&**s));
+            }
+        }
+        TextInput::Arrow(strings) => {
+            for (i, (chunk, c, row)) in arrow_rows(strings).enumerate() {
+                check(i)?;
+                out.push(arrow_row(chunk, c, row).map_err(|e| e.into_pyerr(py))?);
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Rows [`rows_checked`] reads between two Ctrl-C checks.
+const CHECK_ROWS: usize = 1 << 16;
+
 /// The documents of `input` as a Python list, for the paths that process
 /// them one by one in Python: the original str objects for a str, list or
 /// tuple; new strs for Arrow, and `None` for each Arrow null.
