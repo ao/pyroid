@@ -201,7 +201,7 @@ $ pyroid clean sample.parquet clean.parquet --recipe fineweb --lid-model lid.176
 
 `--stats` prints the counts to stderr: documents in and out, the wall time, and one line per drop
 reason with its share of the input. `--stats-json PATH` writes the same counts as JSON, plus the
-counts per stage; for the run above:
+counts per stage and the installed pyroid version; for the run above:
 
 ```text
 {
@@ -218,7 +218,7 @@ counts per stage; for the run above:
   "fineweb_quality": 3
  },
  "wall_s": …,
- "pyroid": "1.0.0",
+ "pyroid": "…",
  "files": 1
 }
 ```

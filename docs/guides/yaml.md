@@ -82,6 +82,9 @@ yaml.scanner.ScannerError: mapping values are not allowed here
         ^
 ```
 
+Without PyYAML installed, the class is pyroid's copy, shown as `pyroid.yaml.ScannerError`, with
+the same message.
+
 Dumping gives the same text byte for byte, for every option: `default_flow_style`,
 `default_style`, `sort_keys`, `indent`, `width` (including `float("inf")`), `allow_unicode`,
 `line_break`, `canonical`, `explicit_start`, `explicit_end`, `version`, `tags` and `encoding`.

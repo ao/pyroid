@@ -1,11 +1,21 @@
 # pyroid
 
-> pyroid reimplements popular Python libraries in Rust, with the same API and the same output. Most of its modules run many times faster than the library they replace. Install with `pip install pyroid` and change the import (`import pyroid.ftfy as ftfy`). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t.
+> pyroid reimplements 21 popular Python libraries in Rust, with the same API and the same output: PyYAML's safe loader and dumper, jmespath, python-dateutil's parser, tabulate, json_repair, difflib, packaging, sqlparse, ftfy, anyascii, fastText inference, langdetect, NLTK's tokenizers, jieba, Trafilatura, warcio, datasketch, datatrove's filters and dedup, NeMo Curator's filters, rouge-score and sacrebleu. Most of its modules run many times faster than the library they replace. Install with `pip install pyroid` and change the import (`import pyroid.yaml as yaml`). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t.
+
+On an AWS EC2 c7i.4xlarge, `pyroid.yaml.safe_load` runs 10x faster than PyYAML's CSafeLoader on 11,878 real YAML files, and `pyroid.jmespath.search` 10 to 26x faster than jmespath 1.1.0 on single queries of a boto3-style response.
 
 The end-to-end benchmarks are on cleaning LLM training data. From WARC files, datatrove's FineWeb pipeline runs 9.5x faster with pyroid's steps, WARC reader included (89.4 s vs 848.3 s, 8 workers, AWS EC2 c7i.4xlarge), and 10.7x as `pyroid clean --recipe fineweb-warc` (79.6 s).
 
 Modules and what they match:
 
+- `pyroid.json_repair`: the same output as json_repair 0.64.9, about 15 times faster on broken JSON.
+- `pyroid.yaml`: PyYAML 6.0.3's `safe_load`, `safe_load_all`, `safe_dump` and `safe_dump_all` (and `load`/`dump` with the stock loaders and dumpers): the same objects, text and exceptions as PyYAML's pure-Python SafeLoader and SafeDumper, several times faster than CSafeLoader.
+- `pyroid.jmespath`: jmespath 1.1.0's `search` and `compile` (and custom `Functions`): the same results, ASTs and exceptions, evaluated natively on Python objects; `pyroid.patch("jmespath")` makes boto3 and botocore use it.
+- `pyroid.tabulate`: tabulate 0.10.0's `tabulate()` (every format and option, `DataFrame.to_markdown()` through `pyroid.patch("tabulate")`), the same text byte for byte.
+- `pyroid.dateutil.parser` (`from pyroid.dateutil import parser`): python-dateutil's `parse`, `parser`, `parserinfo`, `isoparse` and `isoparser`, with the same datetimes, tz objects, exceptions and messages as 2.8.2 to 4.0.0; `parse_batch` and `isoparse_batch` parse lists and Arrow columns in parallel; `pyroid.patch("dateutil")` swaps `parse` and `isoparse` into an installed python-dateutil.
+- `pyroid.difflib`: the standard library's difflib (CPython 3.11 to 3.15) with the interpreter's own results (ratios to the float bit, opcodes, diff lines, HTML); `ratio_batch` and `close_matches_batch` for many strings; `pyroid.patch("difflib")` patches the standard library in place.
+- `pyroid.packaging` (`from pyroid.packaging.version import Version`): packaging 26.3's `Version`, `Specifier`, `SpecifierSet`, `Marker`, `Requirement` and `utils` with the same parsing, order, hashes, strings and exceptions; its objects compare and hash equal to packaging's and, with packaging 26 installed, pass its `isinstance` checks; `parse_batch`, `sort_versions`, `contains_batch`, `filter_batch` for many versions; `pyroid.patch("packaging")` makes installed packaging use it.
+- `pyroid.sqlparse`: sqlparse 0.6.1's `format`, `split`, `parse` and `lexer.tokenize` with the same text, token trees (objects of sqlparse's own classes when it is installed) and exceptions; `format_batch` and `split_batch` for many texts; `pyroid.patch("sqlparse")` for Django and other code calling sqlparse (0.5.0 or later installed, or none).
 - `pyroid.ftfy` (`import pyroid.ftfy as ftfy`): byte-identical to ftfy 6.3.1.
 - `pyroid.translit`: `anyascii()` byte-identical to anyascii 0.3.3; `unidecode()` with Unidecode's signature and errors= semantics but anyascii's output.
 - `pyroid.fasttext` (`pyroid.fasttext.load_model`): fastText inference on the same .bin/.ftz files, bit-identical predictions on Linux (glibc) and Windows x64 (on macOS the probabilities can differ in the last bits).
@@ -13,20 +23,12 @@ Modules and what they match:
 - `pyroid.jieba` (`import pyroid.jieba as jieba`): the same words, offsets and frequencies as jieba 0.42.1, with the default dictionary built in; `lcut(docs, threads=n)` segments a batch in parallel.
 - `pyroid.langdetect` (`from pyroid.langdetect import detect, DetectorFactory`): the same languages and probabilities, bit for bit, as langdetect 1.0.9 for the same `DetectorFactory.seed`; `detect_batch(texts, threads=n)` detects a batch in parallel with the per-call results; `pyroid.patch("langdetect")` runs langdetect's own classes on pyroid's code.
 - `pyroid.trafilatura` (`import pyroid.trafilatura as trafilatura`): the same text as Trafilatura 2.3.1 (the default) or 1.11.0 (`compat="1.11.0"`, the release `datatrove[processing]==0.10.1` installs), byte for byte; `extract_batch(pages, threads=n)` runs pages in parallel; other output formats and metadata are delegated to the installed trafilatura.
-- `pyroid.warc` (`from pyroid.warc import ArchiveIterator`): warcio 1.8.2's WARC/ARC reader with the same records, headers, payloads, offsets, exceptions and messages; `ArchiveIterator(path)` reads without the GIL; `iter_documents(path)` is datatrove 0.10.1's `WarcReader` loop (`process_record`: id, url, date, text), `iter_batches(path)` the same as Arrow record batches; `pyroid.patch("warcio")` swaps the iterator into an installed warcio, so stock datatrove reads with it. Known differences: `check_digests` knows md5, sha1, sha224, sha256, sha384, sha512 only; corrupt brotli streams may decode further than libbrotli.
-- `pyroid.datasketch`: datasketch 2.0.0's MinHash, LeanMinHash and LSH indexes with the same hash values and query results; needs numpy.
-- `pyroid.dedup`: datatrove 0.10.1's MinHash and sentence dedup, with the same removals.
+- `pyroid.warc` (`from pyroid.warc import ArchiveIterator`): warcio 1.8.2's WARC/ARC reader with the same records, headers, payloads, offsets, exceptions and messages; `ArchiveIterator(path)` reads without the GIL; `iter_documents(path)` is datatrove 0.10.1's `WarcReader` loop (`process_record`: id, url, date, text), `iter_batches(path)` the same as Arrow record batches; `pyroid.patch("warcio")` swaps the iterator into an installed warcio, so stock datatrove reads with it. Known difference: `check_digests` knows md5, sha1, sha224, sha256, sha384, sha512 only.
 - `pyroid.filters`: datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad words, symbol lines and URL filters, with the same decisions.
+- `pyroid.dedup`: datatrove 0.10.1's MinHash and sentence dedup, with the same removals.
+- `pyroid.datasketch`: datasketch 2.0.0's MinHash, LeanMinHash and LSH indexes with the same hash values and query results; needs numpy.
 - `pyroid.nemo`: NeMo Curator 1.4.0's heuristic document filters and string modifiers as functions (the scores `score_document` returns, the text `modify_document` returns), without NeMo; `pyroid.integrations.nemo_curator` has the stages.
 - `pyroid.metrics`: ROUGE, BLEU, chrF and chrF++, with scores identical to rouge-score 0.1.2 and sacrebleu 2.6.0.
-- `pyroid.json_repair`: the same output as json_repair 0.64.9, about 15 times faster on broken JSON.
-- `pyroid.jmespath`: jmespath 1.1.0's `search` and `compile` (and custom `Functions`): the same results, ASTs and exceptions, evaluated natively on Python objects; `pyroid.patch("jmespath")` makes boto3 and botocore use it.
-- `pyroid.yaml`: PyYAML 6.0.3's `safe_load`, `safe_load_all`, `safe_dump` and `safe_dump_all` (and `load`/`dump` with the stock loaders and dumpers): the same objects, text and exceptions as PyYAML's pure-Python SafeLoader and SafeDumper, several times faster than CSafeLoader.
-- `pyroid.tabulate`: tabulate 0.10.0's `tabulate()` (every format and option, `DataFrame.to_markdown()` through `pyroid.patch("tabulate")`), the same text byte for byte.
-- `pyroid.dateutil.parser` (`from pyroid.dateutil import parser`): python-dateutil's `parse`, `parser`, `parserinfo`, `isoparse` and `isoparser`, with the same datetimes, tz objects, exceptions and messages as 2.8.2 to 4.0.0; `parse_batch` and `isoparse_batch` parse lists and Arrow columns in parallel; `pyroid.patch("dateutil")` swaps `parse` and `isoparse` into an installed python-dateutil.
-- `pyroid.difflib`: the standard library's difflib (CPython 3.11 to 3.15) with the interpreter's own results (ratios to the float bit, opcodes, diff lines, HTML); `ratio_batch` and `close_matches_batch` for many strings; `pyroid.patch("difflib")` patches the standard library in place.
-- `pyroid.packaging` (`from pyroid.packaging.version import Version`): packaging 26.3's `Version`, `Specifier`, `SpecifierSet`, `Marker`, `Requirement` and `utils` with the same parsing, order, hashes, strings and exceptions; its objects compare and hash equal to packaging's and, with packaging 26 installed, pass its `isinstance` checks; `parse_batch`, `sort_versions`, `contains_batch`, `filter_batch` for many versions; `pyroid.patch("packaging")` makes installed packaging use it.
-- `pyroid.sqlparse`: sqlparse 0.6.1's `format`, `split`, `parse` and `lexer.tokenize` with the same text, token trees (objects of sqlparse's own classes when it is installed) and exceptions; `format_batch` and `split_batch` for many texts; `pyroid.patch("sqlparse")` for Django and other code calling sqlparse (0.5.0 or later installed, or none).
 
 Integrations:
 
@@ -36,7 +38,7 @@ Integrations:
 - `pyroid.integrations.nemo_curator`: drop-in NeMo Curator 1.4.0 CPU text stages (`ScoreFilter`, `Score`, `Filter`, `Modify`, the heuristic and fastText filters, the modifiers).
 - `pyroid.integrations.hf`: Hugging Face `datasets` helpers.
 
-There are no runtime dependencies; the extras are `[fasttext]` and `[datasketch]` (numpy), `[cli]` (pyarrow), `[datatrove]`, `[hf]`, `[warc]`, `[nemo]` and `[all]`.
+There are no runtime dependencies; the extras are `[fasttext]`, `[datasketch]` and `[nemo]` (numpy, which `pyroid.nemo` needs for batch calls only), `[cli]` (pyarrow), `[datatrove]`, `[hf]`, `[warc]` and `[all]`.
 
 Conventions shared by every module:
 

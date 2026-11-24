@@ -11,6 +11,11 @@ pip install pyroid            # no dependencies
 pip install 'pyroid[warc]'    # faust-cchardet and python-magic, for datatrove's decoding
 ```
 
+python-magic needs the libmagic system library, which slim container images leave out
+(`apt-get install libmagic1` on Debian and Ubuntu). Without it, `iter_documents` raises
+`ImportError: failed to find libmagic` at the first record, as datatrove's `WarcReader` does,
+even when every record has a `WARC-Identified-Payload-Type`.
+
 ## Change one import
 
 ```diff

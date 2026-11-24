@@ -147,9 +147,10 @@ These are handed to the real json_repair, which must then be installed. The firs
   documents are delegated, one by one, from a list, a tuple or an Arrow column.
 
 ```python
-json_repair.repair_json(b"{'a': 1")  # json_repair's result, and:
+json_repair.repair_json(b"{'a': 1")  # '', what json_repair returns for these bytes, and:
 # FallbackWarning: pyroid.json_repair.repair_json: the Rust port does not handle a bytes input;
 # delegating to json_repair (slow path). This warning is shown once.
+json_repair.repair_json(b"{'a': 1".decode())  # '{"a": 1}', in Rust
 ```
 
 json_repair's command line (`python -m json_repair`) and its internal modules are not provided.

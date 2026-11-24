@@ -47,6 +47,7 @@ $ pip install "pyroid[fasttext]"     # pyroid.fasttext returns numpy arrays
  model = fasttext.load_model("lid.176.bin")
  model.predict("Bonjour tout le monde", k=2)
  # (('__label__fr', '__label__en'), array([9.94570732e-01, 8.63876310e-04]))
+ # on aarch64 with fasttext-numpy2-wheel or fasttext-wheel installed: 8.63875903e-04 (see above)
 ```
 
 `lid.176.bin` (125 MiB) and the compressed `lid.176.ftz` (916 KiB) are fastText's language-ID

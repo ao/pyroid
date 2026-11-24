@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "pyroid"
 # Single source: [workspace.package].version in the root Cargo.toml.
 dynamic = ["version"]
-description = "Faster Rust versions of ftfy, fastText, Trafilatura, datatrove, json_repair and other popular Python libraries, with the same API and output"
+description = "Faster Rust versions of PyYAML, jmespath, tabulate, python-dateutil, difflib, packaging, sqlparse, ftfy, fastText, langdetect, Trafilatura, datatrove and other popular Python libraries, with the same API and output"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND Zlib"
@@ -64,8 +64,8 @@ hf = ["datasets>=3", "pyarrow>=18", "numpy>=1.26"]
 # datatrove's page decoding in pyroid.warc.iter_documents/iter_batches, the WarcReader drop-in and
 # `pyroid clean --recipe fineweb-warc`: faust-cchardet guesses the charset of pages that are not
 # UTF-8, python-magic (with the libmagic system library) types records that have no
-# WARC-Identified-Payload-Type. Both are imported only when a record needs them, as datatrove
-# does; pyroid.warc.ArchiveIterator needs neither.
+# WARC-Identified-Payload-Type. iter_documents imports both when it starts reading, as datatrove's
+# reader does; iter_batches only when a record needs them. pyroid.warc.ArchiveIterator needs neither.
 warc = ["faust-cchardet", "python-magic"]
 # Every extra above. datatrove, hf and warc pull in orjson, tokenizers, PyYAML and faust-cchardet,
 # which publish no CPython 3.15 wheels yet, so on 3.15 they are left out here (they build from

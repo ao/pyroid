@@ -1,13 +1,22 @@
-"""Text cleaning for LLM datasets, written in Rust.
+"""Rust versions of popular Python libraries, with the same API and the same output.
 
-Version 1.0 is a rewrite from scratch. The 0.7.x API is gone; it lives on the
-``legacy`` branch and as the 0.7.x releases on PyPI.
+Each module is a drop-in for the library it is named after, or the one in parentheses:
+``pyroid.yaml`` (PyYAML), ``pyroid.jmespath``, ``pyroid.tabulate``, ``pyroid.dateutil.parser``
+(python-dateutil), ``pyroid.json_repair``, ``pyroid.difflib`` (the standard library's),
+``pyroid.packaging``, ``pyroid.sqlparse``, ``pyroid.ftfy``, ``pyroid.translit`` (anyascii),
+``pyroid.fasttext``, ``pyroid.langdetect``, ``pyroid.nltk``, ``pyroid.jieba``,
+``pyroid.trafilatura``, ``pyroid.warc`` (warcio),
+``pyroid.filters`` and ``pyroid.dedup`` (datatrove), ``pyroid.datasketch``, ``pyroid.nemo``
+(NeMo Curator) and ``pyroid.metrics`` (rouge-score and sacrebleu). Change the import
+(``import pyroid.yaml as yaml``), or call :func:`pyroid.patch` to make code you don't own use
+them.
 
-Functions live in submodules (``import pyroid.text``). Each accepts a ``str``,
-a ``list`` or ``tuple`` of ``str``, or an Arrow string array or column (anything
-with ``__arrow_c_stream__`` or ``__arrow_c_array__``: pyarrow, polars, pandas,
-HF datasets, ...), and returns the same kind. Arrow input gives a
-:class:`pyroid.Column`.
+The batch functions (``pyroid.ftfy.fix_text_batch``, ``pyroid.filters``, ...) take a ``str``,
+a ``list`` or ``tuple`` of ``str``, or an Arrow string column (pyarrow, polars, pandas, Hugging
+Face ``datasets``), and return the same kind. Arrow input gives a :class:`pyroid.Column`.
+
+pyroid 1.0 was a rewrite: the 0.7.x API is on the ``legacy`` branch and in the 0.7.x releases
+on PyPI.
 """
 
 from types import ModuleType

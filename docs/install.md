@@ -15,15 +15,14 @@ pyroid has no runtime dependencies. Extras:
 | `pyroid[cli]` | `pyarrow>=18`, `numpy>=1.26` | the [`pyroid` command line](guides/cli.md) (Parquet and JSONL in and out, the FineWeb recipe) and `pyroid.integrations.recipes` |
 | `pyroid[datatrove]` | `datatrove>=0.10.1`, `regex`, `tokenizers`, `numpy>=1.26`, `orjson>=3.2` | the [datatrove drop-in steps](guides/datatrove.md) in `pyroid.integrations.datatrove` (`regex` and `tokenizers` are imported by datatrove's filters but not declared by datatrove; `orjson` is for its JSONL reader and writer, from datatrove's `io` extra) |
 | `pyroid[hf]` | `datasets>=3`, `pyarrow>=18`, `numpy>=1.26` | the [Hugging Face `datasets` helpers](guides/huggingface.md) in `pyroid.integrations.hf` |
-| `pyroid[warc]` | `faust-cchardet`, `python-magic` | datatrove's page decoding in [`pyroid.warc.iter_documents`](guides/warc.md), its `WarcReader` drop-in and `pyroid clean --recipe fineweb-warc`: faust-cchardet guesses the charset of pages that are not UTF-8, and python-magic (which needs the libmagic library) types records without `WARC-Identified-Payload-Type`. Both are imported only when a record needs them, as datatrove imports them. `pyroid.warc.ArchiveIterator` needs neither. |
+| `pyroid[warc]` | `faust-cchardet`, `python-magic` | datatrove's page decoding in [`pyroid.warc.iter_documents`](guides/warc.md), its `WarcReader` drop-in and `pyroid clean --recipe fineweb-warc`: faust-cchardet guesses the charset of pages that are not UTF-8, and python-magic (which needs the libmagic system library, e.g. `apt-get install libmagic1`) types records without `WARC-Identified-Payload-Type`. `iter_documents` imports both when it starts reading, as datatrove's reader does; `iter_batches` only when a record needs them. `pyroid.warc.ArchiveIterator` needs neither. |
 | `pyroid[nemo]` | `numpy>=1.26` | [`pyroid.nemo`](guides/nemo-curator.md), which returns numpy arrays of scores. NeMo Curator itself is not pulled in. |
 | `pyroid[all]` | all of the above | everything; on CPython 3.15 it leaves out `datatrove`, `hf` and `warc`, and on 3.14t its orjson builds from source (see below) |
 
-Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
-`pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.jmespath`,
-`pyroid.tabulate`, `pyroid.trafilatura`, `pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader,
-`pyroid.yaml`, `pyroid.dateutil.parser`, `pyroid.difflib`, `pyroid.packaging`, `pyroid.sqlparse`,
-`pyroid.langdetect` and `pyroid.patch()` need none of them.
+Extras combine: `pip install "pyroid[cli,fasttext]"`. The modules listed on the
+[home page](index.md#whats-in-it) need none of them, apart from `pyroid.fasttext`,
+`pyroid.datasketch` and `pyroid.nemo` (numpy) and the datatrove page decoding of `pyroid.warc`
+(`pyroid[warc]`). `pyroid.patch()` needs none either.
 
 Some dependencies of the `datatrove`, `hf` and `warc` extras publish no wheels for some
 interpreters yet: PyYAML and faust-cchardet for CPython 3.15 and 3.15t, tokenizers for 3.15t, and
@@ -120,7 +119,7 @@ On free-threaded builds, importing pyroid does not re-enable the GIL. See
 $ python -c "import pyroid; print(pyroid.__version__)"
 ```
 
-It prints the installed version as pip shows it (PEP 440, e.g. `1.0.0`).
+It prints the installed version as pip shows it, in PEP 440 form.
 
 If the native extension is missing or was built for another Python, `import pyroid` fails with an
 `ImportError` that says so. pyroid has no pure-Python fallback.

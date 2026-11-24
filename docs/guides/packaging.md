@@ -106,6 +106,9 @@ Errors have packaging's classes and messages:
 packaging.version.InvalidVersion: Invalid version: '1.0.0-final'
 ```
 
+Without packaging installed, the class is pyroid's copy, shown as
+`pyroid.packaging.version.InvalidVersion`, with the same message.
+
 ## Mixing pyroid's and packaging's objects {#interop}
 
 pyroid's objects meet packaging's in your code, in packaging's own modules (`ranges`, `metadata`,
@@ -249,7 +252,8 @@ sets, and `int()` for digit runs longer than 19 characters.
 26.3's own `VersionRange` code on pyroid's objects, with one
 [`pyroid.FallbackWarning`](../concepts/fallbacks.md) per function, at the caller's line. A test
 suite that turns warnings into errors (`-W error`, or pytest's `filterwarnings = ["error"]`) needs
-`-W ignore::pyroid.FallbackWarning` for these. Without packaging they raise
+`ignore::pyroid.FallbackWarning` after it for these
+([warnings as errors](patch.md#warnings-as-errors)). Without packaging they raise
 [`pyroid.PyroidError`](../reference/pyroid.md#pyroid.PyroidError).
 
 A `SpecifierSet` built from items that are not `Specifier` objects (setuptools passes strings)

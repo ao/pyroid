@@ -98,6 +98,28 @@ def test_bare_install_modules_import(run_python: RunPython) -> None:
 
 
 @pytest.mark.thread_unsafe(reason="runs a subprocess")
+def test_nemo_batch_without_numpy_names_the_extra(run_python: RunPython) -> None:
+    # pyroid.nemo imports and scores a str without numpy; a batch returns an array and needs it.
+    proc = run_python(
+        """
+        import sys
+        sys.modules["numpy"] = None
+        import pyroid.nemo as nemo
+        print(nemo.word_count("one two three"))
+        try:
+            nemo.word_count(["one two three"])
+        except ImportError as e:
+            print(e)
+        """
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.splitlines() == [
+        "3",
+        "pyroid.nemo returns numpy arrays for batches: pip install 'pyroid[nemo]' (or numpy)",
+    ], proc.stdout
+
+
+@pytest.mark.thread_unsafe(reason="runs a subprocess")
 def test_pyroid_run_needs_no_optional_dependency(run_python: RunPython, tmp_path: Path) -> None:
     # `pyroid run` only patches imports; the other commands need pyarrow and say so.
     script = tmp_path / "uses_ftfy.py"

@@ -5,8 +5,10 @@
 (ROUGE-N, ROUGE-L and ROUGE-Lsum, with NLTK 3.10.4's Porter stemmer; © The rouge_score Authors,
 Apache-2.0) and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF and chrF++;
 © Amazon.com, Inc. or its affiliates, Apache-2.0). Scores are identical to rouge-score 0.1.2 and
-sacrebleu 2.6.0: the same floats bit for bit, the same result types, `str()`, `repr()`,
-`format()` output, signature strings and exceptions ([parity](../compatibility.md#metrics)).
+sacrebleu 2.6.0: the same floats bit for bit, the same `str()`, `repr()` and `format()` output,
+signature strings and exceptions ([parity](../compatibility.md#metrics)). The results are
+pyroid's own classes with the same attributes: `corpus_bleu` returns a
+`pyroid.metrics.sacrebleu.BLEUScore`, not sacrebleu's.
 
 ## Change one import
 
