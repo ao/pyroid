@@ -538,7 +538,15 @@ def _watch_parent() -> None:
         return
 
     def watch() -> None:
-        parent.join()
+        while True:
+            try:
+                parent.join()
+                break
+            except BlockingIOError:
+                # The wait's poll was interrupted (a signal to the group) while another thread
+                # stopped the world: on free-threaded CPython with musl it reports EAGAIN instead
+                # of retrying (see _io.py's note on gh-161769). The parent is still there.
+                time.sleep(0.01)
         _thread.interrupt_main(signal.SIGTERM)  # handled even where SIGINT is ignored
         time.sleep(5.0)
         os._exit(1)
