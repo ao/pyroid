@@ -399,7 +399,10 @@ pub fn rows(input: &TextInput) -> Result<Vec<Option<&str>>, BatchError> {
 pub fn to_list<'py>(py: Python<'py>, input: &TextInput) -> PyResult<Bound<'py, PyList>> {
     match input {
         TextInput::Str(s) => PyList::new(py, [s]),
-        TextInput::List(docs) | TextInput::Tuple(docs) => PyList::new(py, docs),
+        TextInput::List(docs) | TextInput::Tuple(docs) => {
+            let items = docs.iter().map(|s| Ok(s.into_pyobject(py)?.into_any()));
+            collect::<PyList>(py, docs.len(), items)
+        }
         TextInput::Arrow(strings) => {
             let items = arrow_rows(strings).map(|(chunk, c, row)| {
                 Ok(

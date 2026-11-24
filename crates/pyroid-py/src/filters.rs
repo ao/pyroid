@@ -27,7 +27,9 @@ use pyroid_core::filters::{
 use pyroid_core::ftfy::UnicodeVersion;
 use pyroid_core::par::{self, PoolError};
 
-use crate::arrow::{Chunk, Column, ColumnType, StrChunk, StrType, build_error};
+use crate::arrow::{
+    Chunk, Column, ColumnType, StrChunk, StrType, build_error, collect, collect_seq,
+};
 use crate::batch::{BatchError, DocCost, detach_one};
 use crate::errors::{input_error, type_name, with_note};
 use crate::input::{TextInput, ThreadsArg, list_items, texts_and_threads};
@@ -346,11 +348,7 @@ fn seq<'py>(
     tuple: bool,
     items: impl ExactSizeIterator<Item = Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    Ok(if tuple {
-        PyTuple::new(py, items)?.into_any()
-    } else {
-        PyList::new(py, items)?.into_any()
-    })
+    collect_seq(py, tuple, items.len(), items.map(Ok))
 }
 
 fn pack<'py>(
@@ -620,21 +618,27 @@ fn _run_list<'py>(
         })
     })
     .map_err(|e| e.into_pyerr(py))?;
-    let codes = PyList::new(
+    let codes = collect::<PyList>(
         py,
-        outcomes.iter().map(|o| match o {
-            Some(o) => reason_obj(py, o),
-            None => PyInt::new(py, NEEDS_WORDS).into_any(),
+        outcomes.len(),
+        outcomes.iter().map(|o| {
+            Ok(match o {
+                Some(o) => reason_obj(py, o),
+                None => PyInt::new(py, NEEDS_WORDS).into_any(),
+            })
         }),
     )?;
-    let new_texts = PyList::new(
+    let new_texts = collect::<PyList>(
         py,
-        outcomes.iter().map(|o| match o {
-            Some(Outcome {
-                text: Cow::Owned(t),
-                ..
-            }) => PyString::new(py, t).into_any(),
-            _ => PyNone::get(py).to_owned().into_any(),
+        outcomes.len(),
+        outcomes.iter().map(|o| {
+            Ok(match o {
+                Some(Outcome {
+                    text: Cow::Owned(t),
+                    ..
+                }) => PyString::new(py, t).into_any(),
+                _ => PyNone::get(py).to_owned().into_any(),
+            })
         }),
     )?;
     Ok((codes, new_texts))
@@ -675,35 +679,35 @@ fn _to_list<'py>(
     threads: Option<ThreadsArg>,
 ) -> PyResult<(Bound<'py, PyList>, Shape)> {
     let (texts, _) = texts_and_threads(texts, threads, None)?;
+    let originals = |d: &[PyBackedStr]| {
+        let items = d.iter().map(|s| Ok(s.into_pyobject(py)?.into_any()));
+        collect::<PyList>(py, d.len(), items)
+    };
     Ok(match &texts {
         TextInput::Str(s) => (PyList::new(py, [s])?, Shape(ShapeKind::Str)),
-        TextInput::List(d) => (PyList::new(py, d)?, Shape(ShapeKind::List)),
-        TextInput::Tuple(d) => (PyList::new(py, d)?, Shape(ShapeKind::Tuple)),
+        TextInput::List(d) => (originals(d)?, Shape(ShapeKind::List)),
+        TextInput::Tuple(d) => (originals(d)?, Shape(ShapeKind::Tuple)),
         TextInput::Arrow(strings) => {
-            let mut out = Vec::with_capacity(strings.len());
-            for (c, chunk) in strings.chunks.iter().enumerate() {
-                for row in 0..chunk.len() {
-                    out.push(match chunk.get(row) {
-                        None => PyNone::get(py).to_owned().into_any(),
-                        Some(Ok(s)) => PyString::new(py, s).into_any(),
-                        Some(Err(err)) => {
-                            return Err(BatchError::BadUtf8 {
-                                chunk: c,
-                                row,
-                                bytes: chunk.bytes(row).unwrap_or_default().to_vec(),
-                                err,
-                            }
-                            .into_pyerr(py));
-                        }
-                    });
-                }
-            }
+            let rows = strings.chunks.iter().enumerate().flat_map(|(c, chunk)| {
+                (0..chunk.len()).map(move |row| match chunk.get(row) {
+                    None => Ok(PyNone::get(py).to_owned().into_any()),
+                    Some(Ok(s)) => Ok(PyString::new(py, s).into_any()),
+                    Some(Err(err)) => Err(BatchError::BadUtf8 {
+                        chunk: c,
+                        row,
+                        bytes: chunk.bytes(row).unwrap_or_default().to_vec(),
+                        err,
+                    }
+                    .into_pyerr(py)),
+                })
+            });
+            let out = collect::<PyList>(py, strings.len(), rows)?;
             let shape = ShapeKind::Arrow {
                 name: strings.field.name.clone(),
                 large: strings.field.ty == StrType::LargeUtf8,
                 lens: strings.chunks.iter().map(StrChunk::len).collect(),
             };
-            (PyList::new(py, out)?, Shape(shape))
+            (out, Shape(shape))
         }
     })
 }
@@ -757,20 +761,11 @@ fn _pack<'py>(
                 || text.get_item(0),
             )
         }
-        ShapeKind::List => pack(
-            py,
-            what,
-            || Ok(PyList::new(py, keep.iter())?.into_any()),
-            || Ok(PyList::new(py, reason.iter())?.into_any()),
-            || Ok(PyList::new(py, text.iter())?.into_any()),
-        ),
-        ShapeKind::Tuple => pack(
-            py,
-            what,
-            || Ok(PyTuple::new(py, keep.iter())?.into_any()),
-            || Ok(PyTuple::new(py, reason.iter())?.into_any()),
-            || Ok(PyTuple::new(py, text.iter())?.into_any()),
-        ),
+        ShapeKind::List | ShapeKind::Tuple => {
+            let tuple = matches!(shape.0, ShapeKind::Tuple);
+            let copy = |t: &Bound<'py, PyTuple>| collect_seq(py, tuple, n, t.iter().map(Ok));
+            pack(py, what, || copy(&keep), || copy(&reason), || copy(&text))
+        }
         ShapeKind::Arrow { name, large, lens } => {
             if lens.iter().sum::<usize>() != n {
                 return Err(PyValueError::new_err(
@@ -876,13 +871,13 @@ mod pii {
 
     use pyo3::exceptions::{PyIndexError, PyValueError};
     use pyo3::prelude::*;
-    use pyo3::types::{PyBool, PyList, PyNone, PyString, PyTuple};
+    use pyo3::types::{PyBool, PyNone, PyString};
     use pyroid_core::columnar::{BoolBuffers, StringBuffers};
     use pyroid_core::filters::pii;
     use pyroid_core::ftfy::UnicodeVersion;
     use pyroid_core::par;
 
-    use crate::arrow::{Chunk, Column, ColumnType, StrType, build_error};
+    use crate::arrow::{Chunk, Column, ColumnType, StrType, build_error, collect_seq};
     use crate::batch::BatchError;
     use crate::input::{TextInput, ThreadsArg, texts_and_threads};
 
@@ -933,11 +928,9 @@ mod pii {
         };
         Ok(match input {
             TextInput::Str(s) => obj(s, &outs[0]),
-            TextInput::List(d) => {
-                PyList::new(py, d.iter().zip(outs).map(|(s, o)| obj(s, o)))?.into_any()
-            }
-            TextInput::Tuple(d) => {
-                PyTuple::new(py, d.iter().zip(outs).map(|(s, o)| obj(s, o)))?.into_any()
+            TextInput::List(d) | TextInput::Tuple(d) => {
+                let items = d.iter().zip(outs).map(|(s, o)| Ok(obj(s, o)));
+                collect_seq(py, matches!(input, TextInput::Tuple(_)), d.len(), items)?
             }
             TextInput::Arrow(strings) => {
                 let large = strings.field.ty == StrType::LargeUtf8;
@@ -979,8 +972,10 @@ mod pii {
     ) -> PyResult<Bound<'py, PyAny>> {
         Ok(match input {
             TextInput::Str(_) => item(&vals[0]),
-            TextInput::List(_) => PyList::new(py, vals.iter().map(&item))?.into_any(),
-            TextInput::Tuple(_) => PyTuple::new(py, vals.iter().map(&item))?.into_any(),
+            TextInput::List(_) | TextInput::Tuple(_) => {
+                let items = vals.iter().map(|v| Ok(item(v)));
+                collect_seq(py, matches!(input, TextInput::Tuple(_)), vals.len(), items)?
+            }
             TextInput::Arrow(strings) => {
                 let mut chunks = Vec::new();
                 let mut rest = vals;
@@ -1440,7 +1435,7 @@ mod url {
     use pyo3::exceptions::{PyAttributeError, PyOverflowError, PyRuntimeError, PyValueError};
     use pyo3::prelude::*;
     use pyo3::pybacked::PyBackedStr;
-    use pyo3::types::{PyBool, PyList, PyString, PyTuple};
+    use pyo3::types::{PyBool, PyString};
     use pyroid_core::columnar::{BoolBuffers, StringBuffers};
     use pyroid_core::filters::Reason;
     use pyroid_core::filters::url::{
@@ -1449,7 +1444,9 @@ mod url {
     use pyroid_core::ftfy::UnicodeVersion;
     use pyroid_core::par;
 
-    use crate::arrow::{ArrowStrings, Chunk, Column, ColumnType, StrType, build_error};
+    use crate::arrow::{
+        ArrowStrings, Chunk, Column, ColumnType, StrType, build_error, collect_seq,
+    };
     use crate::batch::map_values;
     use crate::errors::with_note;
     use crate::input::{TextInput, Threads, ThreadsArg, texts_and_threads, threads as pool};
@@ -1579,10 +1576,14 @@ mod url {
     where
         T: IntoPyObject<'py>,
     {
-        Ok(match input {
-            TextInput::Tuple(_) => PyTuple::new(py, items)?.into_any(),
-            _ => PyList::new(py, items)?.into_any(),
-        })
+        let tuple = matches!(input, TextInput::Tuple(_));
+        let len = items.len();
+        collect_seq(
+            py,
+            tuple,
+            len,
+            items.map(|x| pyo3::IntoPyObjectExt::into_bound_py_any(x, py)),
+        )
     }
 
     /// datatrove 0.10.1's `URLFilter`, built once by `pyroid.filters.URLFilter`.

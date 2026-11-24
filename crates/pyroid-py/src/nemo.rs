@@ -435,6 +435,7 @@ fn repeating_top_ngrams_native<'py>(
     let tops = values(py, &input, results, score_error)?;
     let mut scores = Vec::with_capacity(tops.len());
     let mut ties = Vec::new();
+    let mut checks = crate::arrow::Checks::default();
     for (i, top) in tops.into_iter().enumerate() {
         let tie = match top {
             TopNGram::Score(v) => {
@@ -444,6 +445,7 @@ fn repeating_top_ngrams_native<'py>(
             TopNGram::Tied(tie) => tie,
         };
         scores.push(f64::NAN);
+        let made = tie.starts.as_ref().map_or(0, Vec::len);
         let starts = match tie.starts {
             Some(s) => PyList::new(py, s)?.into_any(),
             None => py.None().into_bound(py),
@@ -457,9 +459,12 @@ fn repeating_top_ngrams_native<'py>(
         };
         let entry = (i, doc_object(py, &input, i), starts, words);
         ties.push(entry.into_pyobject(py)?);
+        checks.tick(py, made)?;
     }
     let scores = output(py, &input, scores)?;
-    PyTuple::new(py, [scores, PyList::new(py, ties)?.into_any()])
+    let n = ties.len();
+    let ties = crate::arrow::collect::<PyList>(py, n, ties.into_iter().map(|t| Ok(t.into_any())))?;
+    PyTuple::new(py, [scores, ties.into_any()])
 }
 
 fn parse_key(secret: &[u8]) -> PyResult<HashKey> {
@@ -552,23 +557,27 @@ fn fasttext_lang_id<'py>(
     let preds = values(py, &input, results, ft_error)?;
     // One str per label, made on first use.
     let mut codes: Vec<Option<Bound<'py, PyString>>> = vec![None; m.nlabels()];
-    let mut langs = Vec::with_capacity(preds.len());
-    for (i, &(id, _)) in preds.iter().enumerate() {
+    let mut lang = |i: usize, id: usize| -> PyResult<Bound<'py, PyAny>> {
         if codes[id].is_none() {
             let bytes = m.label(id);
             let label = std::str::from_utf8(bytes)
                 .map_err(|err| at_index(py, &input, i, label_decode_error(py, bytes, err)))?;
             codes[id] = Some(PyString::new(py, nft::lang_code(label)));
         }
-        langs.push(codes[id].clone().expect("set above"));
-    }
-    let scores: Vec<f64> = preds.iter().map(|&(_, p)| f64::from(p)).collect();
+        Ok(codes[id].clone().expect("set above").into_any())
+    };
     if matches!(input, TextInput::Str(_)) {
-        let lang = langs.pop().expect("one document");
-        return PyTuple::new(py, [scores[0].into_bound_py_any(py)?, lang.into_any()]);
+        let (id, p) = preds[0];
+        return PyTuple::new(py, [f64::from(p).into_bound_py_any(py)?, lang(0, id)?]);
     }
+    let mut langs = Vec::with_capacity(preds.len());
+    for (i, &(id, _)) in preds.iter().enumerate() {
+        langs.push(lang(i, id)?);
+    }
+    let langs = crate::arrow::collect::<PyList>(py, langs.len(), langs.into_iter().map(Ok))?;
+    let scores: Vec<f64> = preds.iter().map(|&(_, p)| f64::from(p)).collect();
     let scores = output(py, &input, scores)?;
-    PyTuple::new(py, [scores, PyList::new(py, langs)?.into_any()])
+    PyTuple::new(py, [scores, langs.into_any()])
 }
 
 /// ``FastTextQualityFilter``'s score: ``p`` if the top label is ``label``, else ``1 - p``.
@@ -645,18 +654,17 @@ fn lang_id_strings<'py>(
             langs.len()
         )));
     }
-    let mut out = Vec::with_capacity(scores.len());
     let mut buf = String::new();
-    for (&score, lang) in scores.iter().zip(&langs) {
+    let out = scores.iter().zip(&langs).map(|(&score, lang)| {
         buf.clear();
         buf.push('[');
         float_repr(score, &mut buf);
         buf.push_str(", ");
         push_str_repr(&mut buf, lang)?;
         buf.push(']');
-        out.push(PyString::new(py, &buf));
-    }
-    PyList::new(py, out)
+        Ok(PyString::new(py, &buf).into_any())
+    });
+    crate::arrow::collect::<PyList>(py, scores.len(), out)
 }
 
 fn add(m: &Bound<'_, PyModule>) -> PyResult<()> {
